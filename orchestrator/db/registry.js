@@ -29,6 +29,20 @@ export function openRegistry({ dbPath = config.dbPath, esp32BaseUrl = config.esp
       db.prepare("SELECT id, name, type, base_url FROM devices WHERE name = 'smartswitch'").get(),
     getSwitchNamesByChannel: () =>
       db.prepare('SELECT name FROM switches ORDER BY channel').all().map((r) => r.name),
+    getGroupNames: () =>
+      db
+        .prepare("SELECT DISTINCT group_name FROM switches WHERE group_name IS NOT NULL ORDER BY group_name")
+        .all()
+        .map((r) => r.group_name),
+    getSwitchNamesByGroup: (group) =>
+      db
+        .prepare('SELECT name FROM switches WHERE group_name = ? ORDER BY channel')
+        .all(group)
+        .map((r) => r.name),
+    logCommand: ({ raw_text, intent, ok, detail }) =>
+      db
+        .prepare('INSERT INTO command_log (ts, raw_text, intent, ok, detail) VALUES (?, ?, ?, ?, ?)')
+        .run(new Date().toISOString(), raw_text, intent == null ? null : JSON.stringify(intent), ok, detail),
     close: () => db.close(),
     _db: db, // exposed for tests/debug only
   };

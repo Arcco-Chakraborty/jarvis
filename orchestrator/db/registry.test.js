@@ -68,3 +68,40 @@ test('seeding is idempotent across reopens (1 device, 8 switches)', () => {
     rmSync(`${dbPath}-journal`, { force: true });
   }
 });
+
+test('getGroupNames returns the distinct groups', () => {
+  const reg = openTestRegistry();
+  assert.deepEqual(reg.getGroupNames(), ['fans', 'lights', 'other']);
+  reg.close();
+});
+
+test('getSwitchNamesByGroup returns members ordered by channel', () => {
+  const reg = openTestRegistry();
+  assert.deepEqual(reg.getSwitchNamesByGroup('lights'), [
+    'tubelight', 'spotlight', 'rgb light', 'night light',
+  ]);
+  assert.deepEqual(reg.getSwitchNamesByGroup('fans'), ['fan 1', 'fan 2']);
+  reg.close();
+});
+
+test('logCommand inserts a row (intent serialized as JSON, null stays null)', () => {
+  const reg = openTestRegistry();
+  reg.logCommand({
+    raw_text: 'turn off the tubelight',
+    intent: { domain: 'switch', action: 'off', target: 'tubelight' },
+    ok: 1,
+    detail: 'Tubelight is off.',
+  });
+  reg.logCommand({ raw_text: 'gibberish', intent: null, ok: 0, detail: 'no match' });
+  const rows = reg._db.prepare('SELECT raw_text, intent, ok, detail FROM command_log ORDER BY id').all();
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows[0], {
+    raw_text: 'turn off the tubelight',
+    intent: '{"domain":"switch","action":"off","target":"tubelight"}',
+    ok: 1,
+    detail: 'Tubelight is off.',
+  });
+  assert.deepEqual(rows[1], { raw_text: 'gibberish', intent: null, ok: 0, detail: 'no match' });
+  assert.equal(typeof reg._db.prepare('SELECT ts FROM command_log LIMIT 1').get().ts, 'string');
+  reg.close();
+});
