@@ -11,6 +11,7 @@ If the two ever conflict, **PROJECT.md wins** — then fix this file.
 
 - **Phase 0 (Scaffold) — DONE.** ESM Node project, seeded SQLite registry, ESP32 adapter wired with polling, `GET /health` + `GET /state` live. `npm test` green.
 - **Phase 1 (Switch control) — DONE.** `POST /command {text}` parses → routes → flips the real relay → returns `{ok, speak, intent}`. 35 tests green.
+- **Web dashboard (Phase 5, pulled forward) — DONE.** `GET /` serves a static control panel; buttons hit `POST /switch`, free text hits `/command`; live state via `/state` polling. 38 tests green.
 - **Toolchain installed** (verified 2026-05-28): node v22, npm, git, gh, python 3.14. The old blocker is cleared.
 - **Workflow:** the build is driven by the **superpowers** plugin (obra). Use its flow — `/brainstorm` (scope) → `/write-plan` → `/execute-plan`. *If you are a fresh session that just restarted to load superpowers:* read `PROJECT.md`, then this file, then begin Phase 0 via superpowers.
 - **GitHub:** push to a **private** repo named `jarvis` (decided 2026-05-28). Needs `gh auth login` (interactive) first.
