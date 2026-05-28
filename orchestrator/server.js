@@ -3,10 +3,14 @@ import { pathToFileURL } from 'node:url';
 import { config, assertEsp32Configured } from './config.js';
 import { openRegistry } from './db/registry.js';
 import { Esp32Switch } from './devices/esp32-switch.js';
+import { parse } from './intent/index.js';
+import { route } from './router.js';
 
 // Pure factory — no network, no DB. Takes its dependencies so it is trivially testable.
-export function buildApp({ esp32 }) {
+// `onCommand(text)` resolves to { ok, speak, intent }.
+export function buildApp({ esp32, onCommand }) {
   const app = express();
+  app.use(express.json());
 
   app.get('/health', (req, res) => {
     res.json({ ok: true });
@@ -17,10 +21,19 @@ export function buildApp({ esp32 }) {
     res.json({ ok: true, smartswitch: esp32.snapshot(), online: esp32.online });
   });
 
+  // Typed command transcript -> action -> spoken response.
+  app.post('/command', async (req, res) => {
+    const text = req.body?.text;
+    if (typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({ ok: false, speak: "Sorry, I didn't catch that.", intent: null });
+    }
+    res.json(await onCommand(text));
+  });
+
   return app;
 }
 
-// Composition root: seed the registry, wire the real board, poll, and listen (§5.1 boot).
+// Composition root: seed registry, wire the real board, poll, build the command pipeline, listen.
 export function main() {
   assertEsp32Configured();
   const registry = openRegistry();
@@ -37,7 +50,23 @@ export function main() {
   );
   esp32.startPolling();
 
-  buildApp({ esp32 }).listen(config.port, () => {
+  const vocab = {
+    deviceNames: registry.getSwitchNamesByChannel(),
+    groupNames: registry.getGroupNames().filter((g) => g !== 'other'),
+  };
+
+  const onCommand = async (text) => {
+    const intent = parse(text, vocab);
+    if (!intent) {
+      registry.logCommand({ raw_text: text, intent: null, ok: 0, detail: 'no match' });
+      return { ok: false, speak: "Sorry, I didn't catch that.", intent: null };
+    }
+    const { ok, speak } = await route(intent, { board: esp32, registry });
+    registry.logCommand({ raw_text: text, intent, ok: ok ? 1 : 0, detail: speak });
+    return { ok, speak, intent };
+  };
+
+  buildApp({ esp32, onCommand }).listen(config.port, () => {
     console.log(`JARVIS orchestrator listening on http://localhost:${config.port}`);
   });
 }
