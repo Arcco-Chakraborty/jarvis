@@ -1,4 +1,5 @@
 import express from 'express';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { config, assertEsp32Configured } from './config.js';
 import { openRegistry } from './db/registry.js';
@@ -6,22 +7,22 @@ import { Esp32Switch } from './devices/esp32-switch.js';
 import { parse } from './intent/index.js';
 import { route } from './router.js';
 
-// Pure factory — no network, no DB. Takes its dependencies so it is trivially testable.
-// `onCommand(text)` resolves to { ok, speak, intent }.
-export function buildApp({ esp32, onCommand }) {
+// Pure factory — no network, no DB. Dependencies injected for testability.
+// onCommand(text) and onSwitch({target, action}) each resolve to { ok, speak, intent }.
+export function buildApp({ esp32, onCommand, onSwitch }) {
   const app = express();
   app.use(express.json());
+  app.use(express.static(join(import.meta.dirname, 'public')));
 
   app.get('/health', (req, res) => {
     res.json({ ok: true });
   });
 
-  // Debug: current cached state of the smart switch (PROJECT.md §5.1).
   app.get('/state', (req, res) => {
     res.json({ ok: true, smartswitch: esp32.snapshot(), online: esp32.online });
   });
 
-  // Typed command transcript -> action -> spoken response.
+  // Free-text transcript -> NL pipeline.
   app.post('/command', async (req, res) => {
     const text = req.body?.text;
     if (typeof text !== 'string' || !text.trim()) {
@@ -30,10 +31,19 @@ export function buildApp({ esp32, onCommand }) {
     res.json(await onCommand(text));
   });
 
+  // Direct, structured control for the dashboard buttons (bypasses the text matcher).
+  app.post('/switch', async (req, res) => {
+    const { action } = req.body ?? {};
+    if (action !== 'on' && action !== 'off' && action !== 'all_off') {
+      return res.status(400).json({ ok: false, speak: 'Bad request.', intent: null });
+    }
+    res.json(await onSwitch(req.body));
+  });
+
   return app;
 }
 
-// Composition root: seed registry, wire the real board, poll, build the command pipeline, listen.
+// Composition root: seed registry, wire the board, poll, build pipelines, listen.
 export function main() {
   assertEsp32Configured();
   const registry = openRegistry();
@@ -54,6 +64,13 @@ export function main() {
     deviceNames: registry.getSwitchNamesByChannel(),
     groupNames: registry.getGroupNames().filter((g) => g !== 'other'),
   };
+  const knownTargets = new Set([...vocab.deviceNames, ...registry.getGroupNames()]);
+
+  const runIntent = async (intent, rawText) => {
+    const { ok, speak } = await route(intent, { board: esp32, registry });
+    registry.logCommand({ raw_text: rawText, intent, ok: ok ? 1 : 0, detail: speak });
+    return { ok, speak, intent };
+  };
 
   const onCommand = async (text) => {
     const intent = parse(text, vocab);
@@ -61,12 +78,21 @@ export function main() {
       registry.logCommand({ raw_text: text, intent: null, ok: 0, detail: 'no match' });
       return { ok: false, speak: "Sorry, I didn't catch that.", intent: null };
     }
-    const { ok, speak } = await route(intent, { board: esp32, registry });
-    registry.logCommand({ raw_text: text, intent, ok: ok ? 1 : 0, detail: speak });
-    return { ok, speak, intent };
+    return runIntent(intent, text);
   };
 
-  buildApp({ esp32, onCommand }).listen(config.port, () => {
+  const onSwitch = async ({ target, action } = {}) => {
+    let intent;
+    if (action === 'all_off') intent = { domain: 'switch', action: 'all_off' };
+    else if ((action === 'on' || action === 'off') && knownTargets.has(target)) {
+      intent = { domain: 'switch', action, target };
+    } else {
+      return { ok: false, speak: "I don't know how to do that.", intent: null };
+    }
+    return runIntent(intent, `[ui] ${action}${target ? ' ' + target : ''}`);
+  };
+
+  buildApp({ esp32, onCommand, onSwitch }).listen(config.port, () => {
     console.log(`JARVIS orchestrator listening on http://localhost:${config.port}`);
   });
 }

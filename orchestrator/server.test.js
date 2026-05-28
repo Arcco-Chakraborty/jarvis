@@ -82,3 +82,49 @@ test('POST /command with missing text returns 400', async () => {
     server.close();
   }
 });
+
+test('POST /switch returns the onSwitch result as JSON', async () => {
+  const onSwitch = async (body) => ({
+    ok: true,
+    speak: `did: ${body.action} ${body.target}`,
+    intent: { domain: 'switch', action: body.action, target: body.target },
+  });
+  const server = buildApp({ esp32: stubEsp32({}), onSwitch }).listen(0);
+  try {
+    await new Promise((resolve) => server.once('listening', resolve));
+    const { port } = server.address();
+    const res = await fetch(`http://127.0.0.1:${port}/switch`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ target: 'tubelight', action: 'off' }),
+    });
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), {
+      ok: true,
+      speak: 'did: off tubelight',
+      intent: { domain: 'switch', action: 'off', target: 'tubelight' },
+    });
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /switch with invalid action returns 400', async () => {
+  const onSwitch = async () => {
+    throw new Error('onSwitch should not be called for invalid action');
+  };
+  const server = buildApp({ esp32: stubEsp32({}), onSwitch }).listen(0);
+  try {
+    await new Promise((resolve) => server.once('listening', resolve));
+    const { port } = server.address();
+    const res = await fetch(`http://127.0.0.1:${port}/switch`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ target: 'tubelight', action: 'explode' }),
+    });
+    assert.equal(res.status, 400);
+    assert.deepEqual(await res.json(), { ok: false, speak: 'Bad request.', intent: null });
+  } finally {
+    server.close();
+  }
+});
