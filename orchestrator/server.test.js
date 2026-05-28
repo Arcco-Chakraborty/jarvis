@@ -128,3 +128,16 @@ test('POST /switch with invalid action returns 400', async () => {
     server.close();
   }
 });
+
+test('GET / serves the dashboard HTML', async () => {
+  const server = buildApp({ esp32: stubEsp32({}) }).listen(0);
+  try {
+    await new Promise((resolve) => server.once('listening', resolve));
+    const { port } = server.address();
+    const res = await fetch(`http://127.0.0.1:${port}/`);
+    assert.equal(res.status, 200);
+    assert.match(await res.text(), /JARVIS/);
+  } finally {
+    server.close();
+  }
+});

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JARVIS</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: system-ui, sans-serif; margin: 0; background:#111; color:#eee; }
+  header { display:flex; align-items:center; gap:.6rem; padding:1rem 1.25rem; border-bottom:1px solid #333; }
+  header h1 { font-size:1.2rem; margin:0; letter-spacing:.18em; }
+  .dot { width:.7rem; height:.7rem; border-radius:50%; background:#666; }
+  .dot.online { background:#3fb950; }
+  main { padding:1.25rem; max-width:760px; margin:0 auto; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:.7rem; }
+  .tile { padding:.9rem; border:1px solid #333; border-radius:.6rem; background:#1b1b1b; cursor:pointer; text-align:left; color:#eee; font:inherit; }
+  .tile:hover { border-color:#555; }
+  .tile .name { display:block; font-weight:600; text-transform:capitalize; }
+  .tile .st { font-size:.85rem; color:#888; }
+  .tile.on { background:#16301c; border-color:#2ea043; }
+  .tile.on .st { color:#3fb950; }
+  .row { display:flex; flex-wrap:wrap; gap:.5rem; margin:1.25rem 0; }
+  button.act { padding:.5rem .8rem; border:1px solid #333; border-radius:.5rem; background:#1b1b1b; color:#eee; cursor:pointer; font:inherit; }
+  button.act:hover { border-color:#555; }
+  .cmd { display:flex; gap:.5rem; margin-top:1rem; }
+  .cmd input { flex:1; padding:.55rem .7rem; border:1px solid #333; border-radius:.5rem; background:#1b1b1b; color:#eee; font:inherit; }
+  .say { margin-top:1rem; min-height:1.4em; color:#9ecbff; }
+  body.offline .grid { opacity:.45; pointer-events:none; }
+</style>
+</head>
+<body>
+<header><span id="dot" class="dot"></span><h1>JARVIS</h1></header>
+<main>
+  <div id="tiles" class="grid"></div>
+  <div class="row">
+    <button class="act" onclick="sw('lights','on')">Lights On</button>
+    <button class="act" onclick="sw('lights','off')">Lights Off</button>
+    <button class="act" onclick="sw('fans','on')">Fans On</button>
+    <button class="act" onclick="sw('fans','off')">Fans Off</button>
+    <button class="act" onclick="allOff()">All Off</button>
+  </div>
+  <form class="cmd" onsubmit="return runCmd(event)">
+    <input id="cmd" placeholder="turn off the tubelight" autocomplete="off" />
+    <button class="act" type="submit">Send</button>
+  </form>
+  <div id="say" class="say"></div>
+</main>
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  async function post(path, body) {
+    try {
+      const r = await fetch(path, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({}));
+      if (j && j.speak) $('say').textContent = '▸ ' + j.speak;
+    } catch { $('say').textContent = '▸ (request failed)'; }
+    refresh();
+  }
+  const sw = (target, action) => post('/switch', { target, action });
+  const allOff = () => post('/switch', { action: 'all_off' });
+  function runCmd(e) { e.preventDefault(); const t = $('cmd').value.trim(); if (t) post('/command', { text: t }); $('cmd').value = ''; return false; }
+
+  function render(state) {
+    $('dot').className = 'dot' + (state.online ? ' online' : '');
+    document.body.classList.toggle('offline', !state.online);
+    const sm = state.smartswitch || {};
+    const tiles = $('tiles');
+    tiles.innerHTML = '';
+    for (const [name, on] of Object.entries(sm)) {
+      const b = document.createElement('button');
+      b.className = 'tile' + (on ? ' on' : '');
+      const nameEl = document.createElement('span'); nameEl.className = 'name'; nameEl.textContent = name;
+      const stEl = document.createElement('span'); stEl.className = 'st'; stEl.textContent = on ? 'on' : 'off';
+      b.append(nameEl, stEl);
+      b.onclick = () => sw(name, on ? 'off' : 'on');
+      tiles.appendChild(b);
+    }
+  }
+
+  async function refresh() {
+    try { const r = await fetch('/state'); render(await r.json()); }
+    catch { document.body.classList.add('offline'); }
+  }
+  refresh();
+  setInterval(refresh, 1500);
+</script>
+</body>
+</html>
