@@ -1,0 +1,86 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { openRegistry } from './db/registry.js';
+import { route } from './router.js';
+
+function reg() {
+  return openRegistry({ dbPath: ':memory:', esp32BaseUrl: 'http://test' });
+}
+
+function fakeBoard({ states = {}, throwOnSet = false } = {}) {
+  return {
+    calls: [],
+    allOffCalled: false,
+    async set(name, on) {
+      if (throwOnSet) throw new Error('unreachable');
+      this.calls.push([name, on]);
+    },
+    async allOff() {
+      this.allOffCalled = true;
+    },
+    isOn(name) {
+      return states[name];
+    },
+  };
+}
+
+test('device off calls set(false) and speaks', async () => {
+  const board = fakeBoard();
+  const registry = reg();
+  const res = await route({ domain: 'switch', action: 'off', target: 'tubelight' }, { board, registry });
+  assert.deepEqual(board.calls, [['tubelight', false]]);
+  assert.deepEqual(res, { ok: true, speak: 'Tubelight is off.' });
+  registry.close();
+});
+
+test('device on calls set(true) and speaks', async () => {
+  const board = fakeBoard();
+  const registry = reg();
+  const res = await route({ domain: 'switch', action: 'on', target: 'fan 1' }, { board, registry });
+  assert.deepEqual(board.calls, [['fan 1', true]]);
+  assert.deepEqual(res, { ok: true, speak: 'Fan 1 is on.' });
+  registry.close();
+});
+
+test('group off expands to all members ordered by channel', async () => {
+  const board = fakeBoard();
+  const registry = reg();
+  const res = await route({ domain: 'switch', action: 'off', target: 'lights' }, { board, registry });
+  assert.deepEqual(board.calls, [
+    ['tubelight', false], ['spotlight', false], ['rgb light', false], ['night light', false],
+  ]);
+  assert.deepEqual(res, { ok: true, speak: 'Lights are off.' });
+  registry.close();
+});
+
+test('all_off calls board.allOff', async () => {
+  const board = fakeBoard();
+  const registry = reg();
+  const res = await route({ domain: 'switch', action: 'all_off' }, { board, registry });
+  assert.equal(board.allOffCalled, true);
+  assert.deepEqual(res, { ok: true, speak: 'Everything is off.' });
+  registry.close();
+});
+
+test('status reflects cached state', async () => {
+  const registry = reg();
+  const on = await route({ domain: 'switch', action: 'status', target: 'tubelight' }, { board: fakeBoard({ states: { tubelight: true } }), registry });
+  assert.deepEqual(on, { ok: true, speak: 'The tubelight is on.' });
+  const off = await route({ domain: 'switch', action: 'status', target: 'tubelight' }, { board: fakeBoard({ states: { tubelight: false } }), registry });
+  assert.deepEqual(off, { ok: true, speak: 'The tubelight is off.' });
+  registry.close();
+});
+
+test('status before first poll is graceful', async () => {
+  const registry = reg();
+  const res = await route({ domain: 'switch', action: 'status', target: 'tubelight' }, { board: fakeBoard({ states: {} }), registry });
+  assert.deepEqual(res, { ok: true, speak: "I haven't reached the smart switch yet." });
+  registry.close();
+});
+
+test('unreachable board yields the error sentence', async () => {
+  const registry = reg();
+  const res = await route({ domain: 'switch', action: 'off', target: 'tubelight' }, { board: fakeBoard({ throwOnSet: true }), registry });
+  assert.deepEqual(res, { ok: false, speak: "I couldn't reach the smart switch." });
+  registry.close();
+});
