@@ -10,10 +10,11 @@ If the two ever conflict, **PROJECT.md wins** — then fix this file.
 ## TL;DR — where things stand
 
 - **Phase 0 (Scaffold) — DONE.** ESM Node project, seeded SQLite registry, ESP32 adapter wired with polling, `GET /health` + `GET /state` live. `npm test` green.
+- **Phase 1 (Switch control) — DONE.** `POST /command {text}` parses → routes → flips the real relay → returns `{ok, speak, intent}`. 35 tests green.
 - **Toolchain installed** (verified 2026-05-28): node v22, npm, git, gh, python 3.14. The old blocker is cleared.
 - **Workflow:** the build is driven by the **superpowers** plugin (obra). Use its flow — `/brainstorm` (scope) → `/write-plan` → `/execute-plan`. *If you are a fresh session that just restarted to load superpowers:* read `PROJECT.md`, then this file, then begin Phase 0 via superpowers.
 - **GitHub:** push to a **private** repo named `jarvis` (decided 2026-05-28). Needs `gh auth login` (interactive) first.
-- Repo currently holds only: `PROJECT.md` (spec), `esp32-switch.js` (finished adapter), `CHECKPOINT.md` (this file).
+- Repo holds the Phase 0–1 orchestrator under `orchestrator/` (config, registry, intent, router, server + tests), specs/plans under `docs/superpowers/`, plus `PROJECT.md` and this file. Pushed to the private `jarvis` repo on GitHub.
 
 ## Host / environment
 
@@ -126,7 +127,7 @@ per channel. `allOff()` covers the entire board in one call.
 ## Phase roadmap (status)
 
 - [x] **Phase 0 — Scaffold** — Express + SQLite + seeded registry + `GET /health` (+ `/state`). Done 2026-05-28.
-- [ ] **Phase 1 — Switch control.** `POST /command` + rule matcher (switch domain only) + adapter wired with polling. *Verify:* a `curl` POST flips a real relay.
+- [x] **Phase 1 — Switch control.** `POST /command` + rule matcher (on/off, all_off, groups, status) + command logging. Done 2026-05-28. Note: `all_off`/"everything off" power-cycles the board (the socket relay feeds it/its uplink) — brief unreachability then a reboot to defaults `[T,T,T,F,F,F,T,F]`. Left as-is by choice.
 - [ ] **Phase 2 — Voice.** Python service: wake word → record → STT → `POST /command` → TTS. *Verify:* "jarvis, turn off the tubelight" works by voice, end to end.
 - [ ] **Phase 3 — PC agent + music.** Capability loader + `music` capability; add the `pc` domain to intent + routing. *Verify:* "jarvis, play \<song\> on the laptop" works.
 - [ ] **Phase 4 — Gemini fallback.** LLM intent for commands the rules miss, registry injected, strict JSON output, graceful failure.
