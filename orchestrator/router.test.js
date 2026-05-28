@@ -53,6 +53,42 @@ test('group off expands to all members ordered by channel', async () => {
   registry.close();
 });
 
+test('keep_only device turns target on and all other switches off', async () => {
+  const board = fakeBoard();
+  const registry = reg();
+  const res = await route({ domain: 'switch', action: 'keep_only', target: 'tubelight' }, { board, registry });
+  assert.deepEqual(board.calls, [
+    ['fan 1', false],
+    ['fan 2', false],
+    ['tubelight', true],
+    ['spotlight', false],
+    ['rgb light', false],
+    ['night light', false],
+    ['socket', false],
+    ['spare', false],
+  ]);
+  assert.deepEqual(res, { ok: true, speak: 'Only Tubelight is on.' });
+  registry.close();
+});
+
+test('keep_only group turns group members on and all other switches off', async () => {
+  const board = fakeBoard();
+  const registry = reg();
+  const res = await route({ domain: 'switch', action: 'keep_only', target: 'lights' }, { board, registry });
+  assert.deepEqual(board.calls, [
+    ['fan 1', false],
+    ['fan 2', false],
+    ['tubelight', true],
+    ['spotlight', true],
+    ['rgb light', true],
+    ['night light', true],
+    ['socket', false],
+    ['spare', false],
+  ]);
+  assert.deepEqual(res, { ok: true, speak: 'Only Lights are on.' });
+  registry.close();
+});
+
 test('all_off calls board.allOff', async () => {
   const board = fakeBoard();
   const registry = reg();

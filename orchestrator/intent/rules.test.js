@@ -20,6 +20,21 @@ test('group off', () => {
 test('group on', () => {
   assert.deepEqual(m('fans on'), { domain: 'switch', action: 'on', target: 'fans' });
 });
+test('keep one device on and rest off', () => {
+  assert.deepEqual(m('keep tubelight on rest off'), {
+    domain: 'switch', action: 'keep_only', target: 'tubelight',
+  });
+});
+test('target on rest off shorthand', () => {
+  assert.deepEqual(m('tubelight on rest off'), {
+    domain: 'switch', action: 'keep_only', target: 'tubelight',
+  });
+});
+test('keep one group on and everything else off', () => {
+  assert.deepEqual(m('keep only lights on and everything else off'), {
+    domain: 'switch', action: 'keep_only', target: 'lights',
+  });
+});
 test('"all lights off" is the group, not all_off', () => {
   assert.deepEqual(m('all lights off'), { domain: 'switch', action: 'off', target: 'lights' });
 });

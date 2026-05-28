@@ -7,9 +7,22 @@ function capitalize(s) {
 
 export async function route(intent, { board, registry }) {
   try {
+    const groupNames = registry.getGroupNames();
+
     if (intent.action === 'all_off') {
       await board.allOff();
       return { ok: true, speak: 'Everything is off.' };
+    }
+
+    if (intent.action === 'keep_only') {
+      const isGroup = groupNames.includes(intent.target);
+      const keep = isGroup
+        ? new Set(registry.getSwitchNamesByGroup(intent.target))
+        : new Set([intent.target]);
+      for (const name of registry.getSwitchNamesByChannel()) {
+        await board.set(name, keep.has(name));
+      }
+      return { ok: true, speak: `Only ${capitalize(intent.target)} ${isGroup ? 'are' : 'is'} on.` };
     }
 
     if (intent.action === 'status') {
@@ -22,7 +35,7 @@ export async function route(intent, { board, registry }) {
 
     // on / off
     const on = intent.action === 'on';
-    if (registry.getGroupNames().includes(intent.target)) {
+    if (groupNames.includes(intent.target)) {
       for (const name of registry.getSwitchNamesByGroup(intent.target)) {
         await board.set(name, on);
       }

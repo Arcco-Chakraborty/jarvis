@@ -12,6 +12,10 @@
 
 **Baseline:** 38 tests pass (config 2, registry 8, rules 12, index 2, router 7, server 7).
 
+**Implementation status (2026-05-28):** complete. Task 1 was already committed locally;
+Tasks 2-3 are implemented; `CHECKPOINT.md` marks Phase 4 done; `npm test` passes with
+58 tests. The live server has been started on `http://localhost:3000` for manual testing.
+
 ---
 
 ## Task 1: Fuzzy rule matcher (TDD)

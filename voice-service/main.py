@@ -1,0 +1,57 @@
+import argparse
+import sys
+
+from config import load_config
+from orchestrator import OrchestratorClient
+from stt import build_stt
+from tts import build_tts
+from wakeword import build_wake_listener
+
+
+def handle_text(text, client, speaker):
+    text = (text or "").strip()
+    if not text:
+        return None
+    result = client.command(text)
+    speaker.speak(result.speak)
+    return result
+
+
+def run_loop(config, client=None, stt=None, wake_listener=None, speaker=None):
+    client = client or OrchestratorClient(config.orchestrator_url, config.request_timeout_s)
+    stt = stt or build_stt(config)
+    wake_listener = wake_listener or build_wake_listener(config)
+    speaker = speaker or build_tts(config)
+
+    if config.wake_backend == "manual":
+        print(f"JARVIS voice service ready. Type commands after '{config.wake_word}', Ctrl-D to exit.")
+    else:
+        print("JARVIS voice service ready. Say 'hey jarvis', then speak the command during the recording window.")
+    while True:
+        if not wake_listener.wait():
+            continue
+        text = stt.transcribe()
+        if not text:
+            break
+        handle_text(text, client, speaker)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="JARVIS local voice service")
+    parser.add_argument("--once", metavar="TEXT", help="dispatch one transcript and exit")
+    args = parser.parse_args(argv)
+
+    config = load_config()
+    client = OrchestratorClient(config.orchestrator_url, config.request_timeout_s)
+    speaker = build_tts(config)
+
+    if args.once is not None:
+        result = handle_text(args.once, client, speaker)
+        return 0 if result and result.ok else 1
+
+    run_loop(config, client=client, speaker=speaker)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

@@ -76,6 +76,15 @@ export function matchSwitchCommand(text, vocab) {
   const tokens = norm.split(' ').filter(Boolean);
   const target = findTarget(tokens, deviceNames, groupNames);
 
+  if (
+    target &&
+    /\bon\b/.test(norm) &&
+    /\b(rest|others|everything else|all else|other ones)\b/.test(norm) &&
+    (/\boff\b/.test(norm) || /\bturn of\b/.test(norm))
+  ) {
+    return { domain: 'switch', action: 'keep_only', target };
+  }
+
   // Status query (question form) — single device only.
   if (isQuestion || /^(is|are)\b/.test(norm)) {
     if (target && deviceNames.includes(target)) {

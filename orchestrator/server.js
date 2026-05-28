@@ -73,7 +73,7 @@ export function main() {
   };
 
   const onCommand = async (text) => {
-    const intent = parse(text, vocab);
+    const intent = await parse(text, vocab);
     if (!intent) {
       registry.logCommand({ raw_text: text, intent: null, ok: 0, detail: 'no match' });
       return { ok: false, speak: "Sorry, I didn't catch that.", intent: null };
