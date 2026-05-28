@@ -9,8 +9,8 @@ If the two ever conflict, **PROJECT.md wins** — then fix this file.
 
 ## TL;DR — where things stand
 
-- **Phase 0 (Scaffold) — NOT STARTED.** No code written yet.
-- **Toolchain not installed on this machine yet** (no node / npm / git / gh). This is the first hard blocker — see *Host / environment* and step 0 of *Immediate next actions*.
+- **Phase 0 (Scaffold) — DONE.** ESM Node project, seeded SQLite registry, ESP32 adapter wired with polling, `GET /health` + `GET /state` live. `npm test` green.
+- **Toolchain installed** (verified 2026-05-28): node v22, npm, git, gh, python 3.14. The old blocker is cleared.
 - **Workflow:** the build is driven by the **superpowers** plugin (obra). Use its flow — `/brainstorm` (scope) → `/write-plan` → `/execute-plan`. *If you are a fresh session that just restarted to load superpowers:* read `PROJECT.md`, then this file, then begin Phase 0 via superpowers.
 - **GitHub:** push to a **private** repo named `jarvis` (decided 2026-05-28). Needs `gh auth login` (interactive) first.
 - Repo currently holds only: `PROJECT.md` (spec), `esp32-switch.js` (finished adapter), `CHECKPOINT.md` (this file).
@@ -20,7 +20,7 @@ If the two ever conflict, **PROJECT.md wins** — then fix this file.
 **This machine IS the production host** from PROJECT.md — the "Ubuntu spare laptop" that runs the orchestrator + voice service. So local dev == the deploy box.
 
 - **OS:** Ubuntu 26.04 LTS  •  **Host:** `arcco-chakraborty-Latitude-5490` (Dell Latitude 5490)
-- **LAN:** `192.168.1.x` — this host is `192.168.1.167`. The ESP32 `smartswitch` will take a static DHCP lease on this subnet; its base URL goes in `.env`. (`smartswitch.local` won't resolve — no mDNS in the firmware.)
+- **LAN:** this host is `192.168.1.167` (`192.168.1.x`). The ESP32 `smartswitch` is at **`192.168.0.202`** — a *different* /24 (`192.168.0.x`), yet reachable from the host (cross-subnet routing works). Its base URL is in `.env`. (`smartswitch.local` won't resolve — no mDNS.)
 - **Toolchain:** not installed. `sudo` needs a password, so the *user* runs:
   `sudo apt update && sudo apt install -y nodejs npm git gh` — then confirm `node --version` ≥ 18.
 - PC agents (Phase 3) run on *other* machines on this same LAN.
@@ -125,7 +125,7 @@ per channel. `allOff()` covers the entire board in one call.
 
 ## Phase roadmap (status)
 
-- [ ] **Phase 0 — Scaffold** ← *you are here.* Express + SQLite + seeded registry + `GET /health`.
+- [x] **Phase 0 — Scaffold** — Express + SQLite + seeded registry + `GET /health` (+ `/state`). Done 2026-05-28.
 - [ ] **Phase 1 — Switch control.** `POST /command` + rule matcher (switch domain only) + adapter wired with polling. *Verify:* a `curl` POST flips a real relay.
 - [ ] **Phase 2 — Voice.** Python service: wake word → record → STT → `POST /command` → TTS. *Verify:* "jarvis, turn off the tubelight" works by voice, end to end.
 - [ ] **Phase 3 — PC agent + music.** Capability loader + `music` capability; add the `pc` domain to intent + routing. *Verify:* "jarvis, play \<song\> on the laptop" works.
