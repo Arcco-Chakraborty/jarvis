@@ -1,0 +1,11 @@
+# dependencies
+node_modules/
+
+# secrets & local config
+.env
+
+# sqlite database (runtime-generated)
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
