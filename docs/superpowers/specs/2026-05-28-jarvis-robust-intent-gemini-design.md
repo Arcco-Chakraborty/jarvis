@@ -45,13 +45,16 @@ fuzzy-capable target-finding (approach A — conservative, target words only).
 - Build candidate windows: every contiguous run of **1 and 2 tokens**; each window's *joined* form is
   its tokens concatenated without spaces (so `"tube light"`→`"tubelight"`, `"night light"`→
   `"nightlight"` — handles STT word splits/joins).
-- For each vocab target `T` (device or group name), `Tj = T` without spaces. Compute the min
-  Levenshtein distance between `Tj` and any window's joined form.
-- `T` matches if `minDist ≤ maxDist(Tj)`, where **`maxDist(len) = len <= 4 ? 0 : Math.min(2, Math.floor(len/4))`**
-  (short names like `fans`, `fan 1` require an exact match — avoids ambiguous fuzzy flips; longer
-  names tolerate 1–2 edits).
-- Among matching targets pick the smallest distance; tie-break by **longest** `Tj` (so `night light`
-  beats `lights`), then first. Exact (distance 0) always wins.
+- **Device** names are fuzzy-matched: `Tj = name` without spaces; the device matches if the min
+  Levenshtein distance between `Tj` and any window's joined form is `≤ maxDist(Tj)`, where
+  **`maxDist(len) = len <= 4 ? 0 : Math.min(2, Math.floor(len/4))`** (so `fan 1`/`fan 2` need an exact
+  match; `socket`/`spare` tolerate 1; `tubelight`/`spotlight`/`rgb light`/`night light` tolerate 2).
+  Among matching devices pick the smallest distance; tie-break by longest `Tj`, then first. Exact wins.
+- **Group** names (`lights`, `fans`) are matched **exactly** (a window equals the group name,
+  space-stripped) — never fuzzy. Groups trigger broad multi-relay actions, so fuzzing them (e.g.
+  `light`→`lights`, distance 1) would risk flipping the wrong set; the Gemini layer handles garbled
+  group commands instead.
+- An exactly-present group takes priority over a fuzzy device match.
 
 **Action detection** (kept mostly exact — fuzzing 2-char words causes false flips):
 - **status** if the text is a question (starts `is`/`are`, or original had `?`).
