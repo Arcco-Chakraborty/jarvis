@@ -7,11 +7,15 @@
 <style>
   :root { color-scheme: dark; }
   body { font-family: system-ui, sans-serif; margin: 0; background:#111; color:#eee; }
-  header { display:flex; align-items:center; gap:.6rem; padding:1rem 1.25rem; border-bottom:1px solid #333; }
+  header { display:flex; align-items:center; gap:1rem; padding:1rem 1.25rem; border-bottom:1px solid #333; flex-wrap:wrap; }
   header h1 { font-size:1.2rem; margin:0; letter-spacing:.18em; }
-  .dot { width:.7rem; height:.7rem; border-radius:50%; background:#666; }
-  .dot.online { background:#3fb950; }
-  main { padding:1.25rem; max-width:760px; margin:0 auto; }
+  .dots { display:flex; gap:1rem; margin-left:auto; font-size:.8rem; color:#888; }
+  .dots span { display:flex; align-items:center; gap:.35rem; }
+  .dot { width:.7rem; height:.7rem; border-radius:50%; background:#666; display:inline-block; }
+  .dot.ok { background:#3fb950; }
+  .dot.bad { background:#f85149; }
+  main { padding:1.25rem; max-width:820px; margin:0 auto; }
+  h2 { font-size:.8rem; text-transform:uppercase; letter-spacing:.12em; color:#888; margin:1.5rem 0 .6rem; border-top:1px solid #2a2a2a; padding-top:1rem; }
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:.7rem; }
   .tile { padding:.9rem; border:1px solid #333; border-radius:.6rem; background:#1b1b1b; cursor:pointer; text-align:left; color:#eee; font:inherit; }
   .tile:hover { border-color:#555; }
@@ -19,17 +23,38 @@
   .tile .st { font-size:.85rem; color:#888; }
   .tile.on { background:#16301c; border-color:#2ea043; }
   .tile.on .st { color:#3fb950; }
-  .row { display:flex; flex-wrap:wrap; gap:.5rem; margin:1.25rem 0; }
+  .row { display:flex; flex-wrap:wrap; gap:.5rem; margin:1rem 0; }
   button.act { padding:.5rem .8rem; border:1px solid #333; border-radius:.5rem; background:#1b1b1b; color:#eee; cursor:pointer; font:inherit; }
   button.act:hover { border-color:#555; }
   .cmd { display:flex; gap:.5rem; margin-top:1rem; }
   .cmd input { flex:1; padding:.55rem .7rem; border:1px solid #333; border-radius:.5rem; background:#1b1b1b; color:#eee; font:inherit; }
   .say { margin-top:1rem; min-height:1.4em; color:#9ecbff; }
   body.offline .grid { opacity:.45; pointer-events:none; }
+  .vstate { display:flex; align-items:center; gap:.6rem; }
+  .badge { padding:.15rem .6rem; border-radius:1rem; background:#1b1b1b; border:1px solid #333; font-size:.8rem; text-transform:uppercase; letter-spacing:.08em; }
+  .badge.listening { background:#10243a; border-color:#1f6feb; color:#79c0ff; }
+  .badge.awake, .badge.recording, .badge.transcribing { background:#3a2d10; border-color:#9e6a00; color:#f0c674; }
+  .meter { position:relative; flex:1; height:1.2rem; background:#1b1b1b; border:1px solid #333; border-radius:.4rem; overflow:hidden; min-width:180px; }
+  .meter .fill { height:100%; background:#3fb950; width:0%; transition:width .15s linear; }
+  .meter .thr { position:absolute; top:0; bottom:0; width:2px; background:#f0c674; }
+  .meter .num { position:absolute; right:.4rem; top:0; line-height:1.2rem; font-size:.7rem; color:#ddd; }
+  .heard { margin-top:.6rem; color:#9ecbff; min-height:1.3em; }
+  .feed { font-size:.85rem; }
+  .feed .item { display:flex; gap:.7rem; padding:.35rem 0; border-bottom:1px solid #222; }
+  .feed .item.bad .meta { color:#f0a0a0; }
+  .feed time { color:#666; white-space:nowrap; }
+  .feed .meta { color:#9aa; }
 </style>
 </head>
 <body>
-<header><span id="dot" class="dot"></span><h1>JARVIS</h1></header>
+<header>
+  <h1>JARVIS</h1>
+  <div class="dots">
+    <span><i id="dot-orch" class="dot"></i>orch</span>
+    <span><i id="dot-board" class="dot"></i>board</span>
+    <span><i id="dot-voice" class="dot"></i>voice</span>
+  </div>
+</header>
 <main>
   <div id="tiles" class="grid"></div>
   <div class="row">
@@ -44,9 +69,20 @@
     <button class="act" type="submit">Send</button>
   </form>
   <div id="say" class="say"></div>
+
+  <h2>Voice</h2>
+  <div class="vstate">
+    <span id="vbadge" class="badge">idle</span>
+    <div class="meter"><div id="wfill" class="fill"></div><div id="wthr" class="thr"></div><span id="wnum" class="num">0.00</span></div>
+  </div>
+  <div id="heard" class="heard"></div>
+
+  <h2>Activity</h2>
+  <div id="feed" class="feed"></div>
 </main>
 <script>
   const $ = (id) => document.getElementById(id);
+  const setDot = (id, ok) => { $(id).className = 'dot ' + (ok ? 'ok' : 'bad'); };
 
   async function post(path, body) {
     try {
@@ -54,14 +90,14 @@
       const j = await r.json().catch(() => ({}));
       if (j && j.speak) $('say').textContent = '▸ ' + j.speak;
     } catch { $('say').textContent = '▸ (request failed)'; }
-    refresh();
+    refresh(); pollLog();
   }
   const sw = (target, action) => post('/switch', { target, action });
   const allOff = () => post('/switch', { action: 'all_off' });
-  function runCmd(e) { e.preventDefault(); const t = $('cmd').value.trim(); if (t) post('/command', { text: t }); $('cmd').value = ''; return false; }
+  function runCmd(e) { e.preventDefault(); const t = $('cmd').value.trim(); if (t) post('/command', { text: t }); $('cmd').value=''; return false; }
 
-  function render(state) {
-    $('dot').className = 'dot' + (state.online ? ' online' : '');
+  function renderState(state) {
+    setDot('dot-board', !!state.online);
     document.body.classList.toggle('offline', !state.online);
     const sm = state.smartswitch || {};
     const tiles = $('tiles');
@@ -76,13 +112,52 @@
       tiles.appendChild(b);
     }
   }
-
   async function refresh() {
-    try { const r = await fetch('/state'); render(await r.json()); }
-    catch { document.body.classList.add('offline'); }
+    try { const r = await fetch('/state'); setDot('dot-orch', true); renderState(await r.json()); }
+    catch { setDot('dot-orch', false); document.body.classList.add('offline'); }
   }
-  refresh();
-  setInterval(refresh, 1500);
+
+  function renderVoice(v) {
+    const status = v.status || 'idle';
+    const badge = $('vbadge'); badge.textContent = status; badge.className = 'badge ' + status;
+    const score = Number(v.wakeScore || 0), thr = Number(v.threshold || 0);
+    $('wfill').style.width = Math.max(0, Math.min(1, score)) * 100 + '%';
+    $('wthr').style.left = Math.max(0, Math.min(1, thr)) * 100 + '%';
+    $('wnum').textContent = score.toFixed(2) + (thr ? ' / ' + thr.toFixed(2) : '');
+    $('heard').textContent = v.lastTranscript ? 'heard: "' + v.lastTranscript + '"' : '';
+    setDot('dot-voice', v.ageMs != null && v.ageMs < 3000);
+  }
+  async function pollVoice() {
+    try { renderVoice(await (await fetch('/voice')).json()); }
+    catch { setDot('dot-voice', false); }
+  }
+
+  function intentText(it) {
+    if (!it) return '—';
+    if (it.action === 'all_off') return 'all off';
+    return it.action + (it.target ? ' ' + it.target : '');
+  }
+  async function pollLog() {
+    try {
+      const { commands = [] } = await (await fetch('/log')).json();
+      const feed = $('feed');
+      feed.innerHTML = '';
+      for (const c of commands) {
+        const div = document.createElement('div');
+        div.className = 'item' + (c.ok ? '' : ' bad');
+        const tm = document.createElement('time'); tm.textContent = new Date(c.ts).toLocaleTimeString();
+        const txt = document.createElement('span'); txt.textContent = '"' + (c.text || '') + '"';
+        const meta = document.createElement('span'); meta.className = 'meta';
+        meta.textContent = intentText(c.intent) + (c.via ? ' [' + c.via + ']' : '') + (c.speak ? '  → ' + c.speak : '');
+        div.append(tm, txt, meta);
+        feed.appendChild(div);
+      }
+    } catch {}
+  }
+
+  refresh(); setInterval(refresh, 1500);
+  pollVoice(); setInterval(pollVoice, 500);
+  pollLog(); setInterval(pollLog, 1500);
 </script>
 </body>
 </html>
