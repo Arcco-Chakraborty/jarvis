@@ -1,5 +1,24 @@
 // Pure rule-based matcher for the switch domain. No I/O.
-// `vocab` = { deviceNames: string[], groupNames: string[] } injected from the registry.
+// vocab = { deviceNames: string[], groupNames: string[] }.
+
+// Standard two-row Levenshtein edit distance.
+export function levenshtein(a, b) {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  let curr = new Array(n + 1);
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[n];
+}
 
 function normalize(text) {
   return String(text ?? '')
@@ -11,18 +30,40 @@ function normalize(text) {
     .trim();
 }
 
-// Whole-token containment, so "fans" never matches inside "fan 1" and vice versa.
-// `needle` may contain spaces (e.g. "rgb light").
-function containsTarget(haystack, needle) {
-  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(?:^| )${escaped}(?:$| )`).test(haystack);
+// Max edit distance for a fuzzy DEVICE match by joined-name length.
+// <=4 requires exact (avoids ambiguous flips like fan 1/fan 2); longer tolerate 1-2.
+function maxDist(len) {
+  return len <= 4 ? 0 : Math.min(2, Math.floor(len / 4));
 }
 
-function findTarget(norm, deviceNames, groupNames) {
-  const candidates = [...deviceNames, ...groupNames]
-    .filter((name) => containsTarget(norm, name))
-    .sort((a, b) => b.length - a.length); // longest wins ("night light" over "light")
-  return candidates[0] ?? null;
+// Resolve a target from the normalized tokens.
+// Groups: exact only. Devices: fuzzy within maxDist. An exact group beats a fuzzy device.
+function findTarget(tokens, deviceNames, groupNames) {
+  const windows = [];
+  for (let i = 0; i < tokens.length; i++) {
+    windows.push(tokens[i]);
+    if (i + 1 < tokens.length) windows.push(tokens[i] + tokens[i + 1]);
+  }
+
+  for (const g of groupNames) {
+    if (windows.includes(g.replace(/\s+/g, ''))) return g;
+  }
+
+  let best = null; // { name, dist, tjLen }
+  for (const name of deviceNames) {
+    const tj = name.replace(/\s+/g, '');
+    let min = Infinity;
+    for (const w of windows) {
+      const d = levenshtein(w, tj);
+      if (d < min) min = d;
+    }
+    if (min <= maxDist(tj.length)) {
+      if (best === null || min < best.dist || (min === best.dist && tj.length > best.tjLen)) {
+        best = { name, dist: min, tjLen: tj.length };
+      }
+    }
+  }
+  return best ? best.name : null;
 }
 
 export function matchSwitchCommand(text, vocab) {
@@ -32,7 +73,8 @@ export function matchSwitchCommand(text, vocab) {
   if (!norm) return null;
 
   const { deviceNames = [], groupNames = [] } = vocab ?? {};
-  const target = findTarget(norm, deviceNames, groupNames);
+  const tokens = norm.split(' ').filter(Boolean);
+  const target = findTarget(tokens, deviceNames, groupNames);
 
   // Status query (question form) — single device only.
   if (isQuestion || /^(is|are)\b/.test(norm)) {
@@ -42,14 +84,23 @@ export function matchSwitchCommand(text, vocab) {
     return null;
   }
 
-  // on / off action (whole word).
+  // Action: off (incl. "turn of" STT slip + synonyms) / on. Short words kept exact (no fuzzing).
   let action = null;
-  if (/\boff\b/.test(norm)) action = 'off';
-  else if (/\bon\b/.test(norm)) action = 'on';
+  if (
+    /\boff\b/.test(norm) ||
+    /\bturn of\b/.test(norm) ||
+    tokens.some((t) => t === 'shut' || t === 'kill' || t === 'cut')
+  ) {
+    action = 'off';
+  } else if (/\bon\b/.test(norm)) {
+    action = 'on';
+  }
   if (!action) return null;
 
   if (target) return { domain: 'switch', action, target };
-  if (action === 'off' && /\b(all|everything)\b/.test(norm)) {
+
+  // all_off: off + no specific target + a global word (fuzzy<=1 on the long word "everything").
+  if (action === 'off' && (/\ball\b/.test(norm) || tokens.some((t) => levenshtein(t, 'everything') <= 1))) {
     return { domain: 'switch', action: 'all_off' };
   }
   return null;
