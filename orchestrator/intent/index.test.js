@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parse } from './index.js';
+import { parse, parseWithSource } from './index.js';
 
 const VOCAB = { deviceNames: ['tubelight'], groupNames: ['lights'] };
 
@@ -34,4 +34,20 @@ test('rules miss -> fallback called and its result returned', async () => {
   const r = await parse('lites off', VOCAB, spy);
   assert.equal(called, true);
   assert.deepEqual(r, { domain: 'switch', action: 'off', target: 'tubelight' });
+});
+
+test('parseWithSource: rules hit -> via rules', async () => {
+  assert.deepEqual(await parseWithSource('turn off the tubelight', VOCAB), {
+    intent: { domain: 'switch', action: 'off', target: 'tubelight' }, via: 'rules',
+  });
+});
+test('parseWithSource: rules miss + classify hit -> via gemini', async () => {
+  const spy = async () => ({ domain: 'switch', action: 'off', target: 'tubelight' });
+  assert.deepEqual(await parseWithSource('lites off', VOCAB, spy), {
+    intent: { domain: 'switch', action: 'off', target: 'tubelight' }, via: 'gemini',
+  });
+});
+test('parseWithSource: rules miss + classify null -> via null', async () => {
+  const noop = async () => null;
+  assert.deepEqual(await parseWithSource('make me a sandwich', VOCAB, noop), { intent: null, via: null });
 });

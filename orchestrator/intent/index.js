@@ -1,10 +1,15 @@
 import { matchSwitchCommand } from './rules.js';
 import { geminiClassify } from './gemini.js';
 
-// Parse a command transcript into an intent.
-// Cascade: fuzzy rule matcher (offline) -> Gemini fallback (only on a rules-miss).
-export async function parse(text, vocab, classify = geminiClassify) {
+// Parse + report which layer matched. Cascade: fuzzy rules (offline) -> Gemini fallback.
+export async function parseWithSource(text, vocab, classify = geminiClassify) {
   const m = matchSwitchCommand(text, vocab);
-  if (m) return m;
-  return await classify(text, vocab);
+  if (m) return { intent: m, via: 'rules' };
+  const g = await classify(text, vocab);
+  return { intent: g, via: g ? 'gemini' : null };
+}
+
+// Intent only (back-compat).
+export async function parse(text, vocab, classify = geminiClassify) {
+  return (await parseWithSource(text, vocab, classify)).intent;
 }
