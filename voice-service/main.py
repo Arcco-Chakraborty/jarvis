@@ -3,6 +3,7 @@ import sys
 
 from config import load_config
 from orchestrator import OrchestratorClient
+from reporter import build_reporter
 from stt import build_stt
 from tts import build_tts
 from wakeword import build_wake_listener
@@ -17,23 +18,29 @@ def handle_text(text, client, speaker):
     return result
 
 
-def run_loop(config, client=None, stt=None, wake_listener=None, speaker=None):
+def run_loop(config, client=None, stt=None, wake_listener=None, speaker=None, reporter=None):
     client = client or OrchestratorClient(config.orchestrator_url, config.request_timeout_s)
+    reporter = reporter or build_reporter(config)
     stt = stt or build_stt(config)
-    wake_listener = wake_listener or build_wake_listener(config)
+    wake_listener = wake_listener or build_wake_listener(config, reporter)
     speaker = speaker or build_tts(config)
 
+    reporter.emit("ready")
     if config.wake_backend == "manual":
         print(f"JARVIS voice service ready. Type commands after '{config.wake_word}', Ctrl-D to exit.")
     else:
         print("JARVIS voice service ready. Say 'hey jarvis', then speak the command during the recording window.")
     while True:
+        reporter.emit("listening")
         if not wake_listener.wait():
             continue
+        reporter.emit("recording")
         text = stt.transcribe()
         if not text:
             break
+        reporter.emit("transcript", text=text)
         handle_text(text, client, speaker)
+        reporter.emit("idle")
 
 
 def main(argv=None):
