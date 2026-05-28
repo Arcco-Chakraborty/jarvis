@@ -9,7 +9,7 @@ import { route } from './router.js';
 
 // Pure factory — no network, no DB. Dependencies injected for testability.
 // onCommand(text) and onSwitch({target, action}) each resolve to { ok, speak, intent }.
-export function buildApp({ esp32, onCommand, onSwitch }) {
+export function buildApp({ esp32, onCommand, onSwitch, telemetry }) {
   const app = express();
   app.use(express.json());
   app.use(express.static(join(import.meta.dirname, 'public')));
@@ -38,6 +38,18 @@ export function buildApp({ esp32, onCommand, onSwitch }) {
       return res.status(400).json({ ok: false, speak: 'Bad request.', intent: null });
     }
     res.json(await onSwitch(req.body));
+  });
+
+  // Voice telemetry: voice service reports events here; dashboard reads /voice and /log.
+  app.post('/voice/event', (req, res) => {
+    telemetry?.recordVoiceEvent(req.body ?? {});
+    res.json({ ok: true });
+  });
+  app.get('/voice', (req, res) => {
+    res.json(telemetry ? telemetry.voiceSnapshot() : {});
+  });
+  app.get('/log', (req, res) => {
+    res.json({ commands: telemetry ? telemetry.recentCommands(50) : [] });
   });
 
   return app;

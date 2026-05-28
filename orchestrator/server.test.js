@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildApp } from './server.js';
+import { createTelemetry } from './telemetry.js';
 
 function stubEsp32(snapshot, online = true) {
   return { snapshot: () => snapshot, online };
@@ -137,6 +138,54 @@ test('GET / serves the dashboard HTML', async () => {
     const res = await fetch(`http://127.0.0.1:${port}/`);
     assert.equal(res.status, 200);
     assert.match(await res.text(), /JARVIS/);
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /voice/event records into telemetry; GET /voice reflects it', async () => {
+  const telemetry = createTelemetry();
+  const server = buildApp({ esp32: stubEsp32({}), telemetry }).listen(0);
+  try {
+    await new Promise((r) => server.once('listening', r));
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const post = await fetch(`${base}/voice/event`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'transcript', text: 'lights on' }),
+    });
+    assert.equal(post.status, 200);
+    assert.deepEqual(await post.json(), { ok: true });
+    const snap = await (await fetch(`${base}/voice`)).json();
+    assert.equal(snap.status, 'transcribing');
+    assert.equal(snap.lastTranscript, 'lights on');
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /log returns recent commands from telemetry', async () => {
+  const telemetry = createTelemetry();
+  telemetry.recordCommand({ text: 'soket on', intent: { domain: 'switch', action: 'on', target: 'socket' }, via: 'gemini', ok: true, speak: 'Socket is on.' });
+  const server = buildApp({ esp32: stubEsp32({}), telemetry }).listen(0);
+  try {
+    await new Promise((r) => server.once('listening', r));
+    const body = await (await fetch(`http://127.0.0.1:${server.address().port}/log`)).json();
+    assert.equal(body.commands.length, 1);
+    assert.equal(body.commands[0].via, 'gemini');
+  } finally {
+    server.close();
+  }
+});
+
+test('voice routes tolerate missing telemetry', async () => {
+  const server = buildApp({ esp32: stubEsp32({}) }).listen(0);
+  try {
+    await new Promise((r) => server.once('listening', r));
+    const base = `http://127.0.0.1:${server.address().port}`;
+    assert.equal((await fetch(`${base}/voice/event`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status, 200);
+    assert.deepEqual(await (await fetch(`${base}/voice`)).json(), {});
+    assert.deepEqual(await (await fetch(`${base}/log`)).json(), { commands: [] });
   } finally {
     server.close();
   }
