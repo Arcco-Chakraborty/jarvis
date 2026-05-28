@@ -4,8 +4,9 @@ import { pathToFileURL } from 'node:url';
 import { config, assertEsp32Configured } from './config.js';
 import { openRegistry } from './db/registry.js';
 import { Esp32Switch } from './devices/esp32-switch.js';
-import { parse } from './intent/index.js';
+import { parseWithSource } from './intent/index.js';
 import { route } from './router.js';
+import { createTelemetry } from './telemetry.js';
 
 // Pure factory — no network, no DB. Dependencies injected for testability.
 // onCommand(text) and onSwitch({target, action}) each resolve to { ok, speak, intent }.
@@ -78,19 +79,23 @@ export function main() {
   };
   const knownTargets = new Set([...vocab.deviceNames, ...registry.getGroupNames()]);
 
-  const runIntent = async (intent, rawText) => {
+  const telemetry = createTelemetry();
+
+  const runIntent = async (intent, rawText, via) => {
     const { ok, speak } = await route(intent, { board: esp32, registry });
     registry.logCommand({ raw_text: rawText, intent, ok: ok ? 1 : 0, detail: speak });
-    return { ok, speak, intent };
+    telemetry.recordCommand({ text: rawText, intent, via, ok, speak });
+    return { ok, speak, intent, via };
   };
 
   const onCommand = async (text) => {
-    const intent = await parse(text, vocab);
+    const { intent, via } = await parseWithSource(text, vocab);
     if (!intent) {
       registry.logCommand({ raw_text: text, intent: null, ok: 0, detail: 'no match' });
-      return { ok: false, speak: "Sorry, I didn't catch that.", intent: null };
+      telemetry.recordCommand({ text, intent: null, via: null, ok: false, speak: "Sorry, I didn't catch that." });
+      return { ok: false, speak: "Sorry, I didn't catch that.", intent: null, via: null };
     }
-    return runIntent(intent, text);
+    return runIntent(intent, text, via);
   };
 
   const onSwitch = async ({ target, action } = {}) => {
@@ -99,12 +104,12 @@ export function main() {
     else if ((action === 'on' || action === 'off') && knownTargets.has(target)) {
       intent = { domain: 'switch', action, target };
     } else {
-      return { ok: false, speak: "I don't know how to do that.", intent: null };
+      return { ok: false, speak: "I don't know how to do that.", intent: null, via: 'ui' };
     }
-    return runIntent(intent, `[ui] ${action}${target ? ' ' + target : ''}`);
+    return runIntent(intent, `[ui] ${action}${target ? ' ' + target : ''}`, 'ui');
   };
 
-  buildApp({ esp32, onCommand, onSwitch }).listen(config.port, () => {
+  buildApp({ esp32, onCommand, onSwitch, telemetry }).listen(config.port, () => {
     console.log(`JARVIS orchestrator listening on http://localhost:${config.port}`);
   });
 }
