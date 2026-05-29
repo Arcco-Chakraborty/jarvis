@@ -4,8 +4,18 @@ NUMBER_WORDS = {
 }
 
 
+# Device names that aren't real English words (so the Vosk lexicon can't decode them) ->
+# spoken forms made of real words. Recognized text is normalized back via spoken_to_name.
+SPOKEN_OVERRIDES = {
+    "tubelight": "tube light",
+    "rgb light": "r g b light",
+}
+
+
 def to_spoken(name):
-    """Registry name -> spoken form: 'fan 1' -> 'fan one'. Non-digit names unchanged."""
+    """Registry name -> spoken form Vosk can decode (real words only)."""
+    if name in SPOKEN_OVERRIDES:
+        return SPOKEN_OVERRIDES[name]
     return " ".join(NUMBER_WORDS.get(tok, tok) for tok in name.split(" "))
 
 
