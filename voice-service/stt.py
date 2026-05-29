@@ -39,7 +39,13 @@ class FasterWhisperSTT:
                 ],
                 check=True,
             )
-            segments, _info = self.model.transcribe(str(path), beam_size=1)
+            segments, _info = self.model.transcribe(
+                str(path),
+                language="en",
+                beam_size=5,
+                vad_filter=True,
+                condition_on_previous_text=False,
+            )
             return " ".join(segment.text.strip() for segment in segments).strip()
         finally:
             path.unlink(missing_ok=True)
