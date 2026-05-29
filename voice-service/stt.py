@@ -1,6 +1,7 @@
 import json
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from urllib.request import urlopen
 
@@ -76,21 +77,46 @@ class VoskSTT:
         self.record_seconds = config.record_seconds
         self._grammar = json.dumps(self.phrases + ["[unk]"])
 
-    def transcribe(self):
+    def listen(self, max_initial_silence=5.0, max_utterance=12.0):
         from grammar import normalize_transcript
 
-        proc = subprocess.run(
-            ["arecord", "-q", "-r", str(self.sample_rate), "-c", "1", "-f", "S16_LE",
-             "-t", "raw", "-d", str(int(self.record_seconds))],
+        proc = subprocess.Popen(
+            ["arecord", "-q", "-r", str(self.sample_rate), "-c", "1", "-f", "S16_LE", "-t", "raw"],
             stdout=subprocess.PIPE,
-            check=True,
         )
         rec = self._KaldiRecognizer(self.model, self.sample_rate, self._grammar)
-        rec.AcceptWaveform(proc.stdout)
-        text = (json.loads(rec.FinalResult()).get("text") or "").strip()
+        text = ""
+        started = False
+        t0 = time.monotonic()
+        try:
+            while True:
+                chunk = proc.stdout.read(4000)
+                if not chunk:
+                    break
+                if rec.AcceptWaveform(chunk):
+                    text = json.loads(rec.Result()).get("text", "")
+                    break
+                if json.loads(rec.PartialResult()).get("partial"):
+                    started = True
+                elapsed = time.monotonic() - t0
+                if not started and elapsed >= max_initial_silence:
+                    break
+                if elapsed >= max_utterance:
+                    text = json.loads(rec.FinalResult()).get("text", "")
+                    break
+        finally:
+            proc.terminate()
+            try:
+                proc.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        text = (text or "").strip()
         if not text or text == "[unk]":
             return ""
         return normalize_transcript(text, self.spoken_to_name)
+
+    def transcribe(self):
+        return self.listen(max_initial_silence=self.record_seconds)
 
 
 def build_stt(config, vocab=None):
