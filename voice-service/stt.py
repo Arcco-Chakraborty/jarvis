@@ -1,6 +1,8 @@
+import json
 import subprocess
 import tempfile
 from pathlib import Path
+from urllib.request import urlopen
 
 
 class ManualTextInput:
@@ -51,7 +53,49 @@ class FasterWhisperSTT:
             path.unlink(missing_ok=True)
 
 
-def build_stt(config):
+def fetch_vocab(orchestrator_url, opener=urlopen):
+    """GET {url}/vocab -> {deviceNames, groupNames}; empty vocab on any failure."""
+    try:
+        with opener(orchestrator_url.rstrip("/") + "/vocab", timeout=5) as res:
+            return json.loads(res.read().decode("utf-8"))
+    except Exception:
+        return {"deviceNames": [], "groupNames": []}
+
+
+class VoskSTT:
+    def __init__(self, config, vocab=None):
+        from vosk import Model, KaldiRecognizer
+        from grammar import build_grammar
+
+        self._KaldiRecognizer = KaldiRecognizer
+        if vocab is None:
+            vocab = fetch_vocab(config.orchestrator_url)
+        self.phrases, self.spoken_to_name = build_grammar(vocab)
+        self.model = Model(config.vosk_model_path)
+        self.sample_rate = config.sample_rate
+        self.record_seconds = config.record_seconds
+        self._grammar = json.dumps(self.phrases + ["[unk]"])
+
+    def transcribe(self):
+        from grammar import normalize_transcript
+
+        proc = subprocess.run(
+            ["arecord", "-q", "-r", str(self.sample_rate), "-c", "1", "-f", "S16_LE",
+             "-t", "raw", "-d", str(int(self.record_seconds))],
+            stdout=subprocess.PIPE,
+            check=True,
+        )
+        rec = self._KaldiRecognizer(self.model, self.sample_rate, self._grammar)
+        rec.AcceptWaveform(proc.stdout)
+        text = (json.loads(rec.FinalResult()).get("text") or "").strip()
+        if not text or text == "[unk]":
+            return ""
+        return normalize_transcript(text, self.spoken_to_name)
+
+
+def build_stt(config, vocab=None):
+    if config.stt_backend == "vosk":
+        return VoskSTT(config, vocab=vocab)
     if config.stt_backend == "whisper":
         return FasterWhisperSTT(
             model_name=config.whisper_model,
