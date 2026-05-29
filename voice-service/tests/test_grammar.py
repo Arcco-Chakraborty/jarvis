@@ -1,0 +1,40 @@
+import os
+import sys
+import unittest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from grammar import to_spoken, build_grammar, normalize_transcript
+
+VOCAB = {
+    "deviceNames": ["fan 1", "fan 2", "tubelight", "rgb light", "socket"],
+    "groupNames": ["lights", "fans"],
+}
+
+
+class GrammarTest(unittest.TestCase):
+    def test_to_spoken_numbers(self):
+        self.assertEqual(to_spoken("fan 1"), "fan one")
+        self.assertEqual(to_spoken("fan 2"), "fan two")
+        self.assertEqual(to_spoken("tubelight"), "tubelight")
+
+    def test_build_grammar_phrases_and_map(self):
+        phrases, mapping = build_grammar(VOCAB)
+        for p in [
+            "turn off the fan one", "fan one on", "is the tubelight on",
+            "turn off the rgb light", "lights off", "turn on the lights",
+            "everything off", "keep the lights on rest off",
+        ]:
+            self.assertIn(p, phrases)
+        self.assertEqual(mapping["fan one"], "fan 1")
+        self.assertEqual(mapping["fan two"], "fan 2")
+        self.assertEqual(len(phrases), len(set(phrases)))
+
+    def test_normalize_transcript(self):
+        _, mapping = build_grammar(VOCAB)
+        self.assertEqual(normalize_transcript("turn off the fan one", mapping), "turn off the fan 1")
+        self.assertEqual(normalize_transcript("lights off", mapping), "lights off")
+
+
+if __name__ == "__main__":
+    unittest.main()

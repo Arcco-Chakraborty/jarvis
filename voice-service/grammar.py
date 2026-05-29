@@ -1,0 +1,53 @@
+NUMBER_WORDS = {
+    "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
+    "5": "five", "6": "six", "7": "seven", "8": "eight", "9": "nine",
+}
+
+
+def to_spoken(name):
+    """Registry name -> spoken form: 'fan 1' -> 'fan one'. Non-digit names unchanged."""
+    return " ".join(NUMBER_WORDS.get(tok, tok) for tok in name.split(" "))
+
+
+def build_grammar(vocab):
+    """vocab {deviceNames, groupNames} -> (phrases list, spoken_to_name map)."""
+    devices = (vocab or {}).get("deviceNames", [])
+    groups = (vocab or {}).get("groupNames", [])
+    phrases = []
+    spoken_to_name = {}
+
+    def add(p):
+        if p not in phrases:
+            phrases.append(p)
+
+    for name in devices:
+        sd = to_spoken(name)
+        spoken_to_name[sd] = name
+        add(f"turn on the {sd}")
+        add(f"turn off the {sd}")
+        add(f"{sd} on")
+        add(f"{sd} off")
+        add(f"is the {sd} on")
+        add(f"keep the {sd} on rest off")
+
+    for g in groups:
+        add(f"turn on the {g}")
+        add(f"turn off the {g}")
+        add(f"{g} on")
+        add(f"{g} off")
+        add(f"keep the {g} on rest off")
+
+    for p in ("all off", "everything off", "turn everything off", "turn off everything"):
+        add(p)
+
+    return phrases, spoken_to_name
+
+
+def normalize_transcript(text, spoken_to_name):
+    """Replace spoken device forms with registry names ('fan one' -> 'fan 1')."""
+    out = text
+    for spoken in sorted(spoken_to_name, key=len, reverse=True):
+        name = spoken_to_name[spoken]
+        if spoken != name:
+            out = out.replace(spoken, name)
+    return out
