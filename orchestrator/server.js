@@ -10,7 +10,7 @@ import { createTelemetry } from './telemetry.js';
 
 // Pure factory — no network, no DB. Dependencies injected for testability.
 // onCommand(text) and onSwitch({target, action}) each resolve to { ok, speak, intent }.
-export function buildApp({ esp32, onCommand, onSwitch, telemetry }) {
+export function buildApp({ esp32, onCommand, onSwitch, telemetry, vocab }) {
   const app = express();
   app.use(express.json());
   app.use(express.static(join(import.meta.dirname, 'public')));
@@ -51,6 +51,11 @@ export function buildApp({ esp32, onCommand, onSwitch, telemetry }) {
   });
   app.get('/log', (req, res) => {
     res.json({ commands: telemetry ? telemetry.recentCommands(50) : [] });
+  });
+
+  // Command vocabulary (device + group names) — the voice service builds its grammar from this.
+  app.get('/vocab', (req, res) => {
+    res.json(vocab ?? { deviceNames: [], groupNames: [] });
   });
 
   return app;
@@ -109,7 +114,7 @@ export function main() {
     return runIntent(intent, `[ui] ${action}${target ? ' ' + target : ''}`, 'ui');
   };
 
-  buildApp({ esp32, onCommand, onSwitch, telemetry }).listen(config.port, () => {
+  buildApp({ esp32, onCommand, onSwitch, telemetry, vocab }).listen(config.port, () => {
     console.log(`JARVIS orchestrator listening on http://localhost:${config.port}`);
   });
 }

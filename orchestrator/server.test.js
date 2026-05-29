@@ -190,3 +190,27 @@ test('voice routes tolerate missing telemetry', async () => {
     server.close();
   }
 });
+
+test('GET /vocab returns the injected vocab', async () => {
+  const vocab = { deviceNames: ['tubelight', 'fan 1'], groupNames: ['lights', 'fans'] };
+  const server = buildApp({ esp32: stubEsp32({}), vocab }).listen(0);
+  try {
+    await new Promise((r) => server.once('listening', r));
+    const body = await (await fetch(`http://127.0.0.1:${server.address().port}/vocab`)).json();
+    assert.deepEqual(body, vocab);
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /vocab tolerates missing vocab', async () => {
+  const server = buildApp({ esp32: stubEsp32({}) }).listen(0);
+  try {
+    await new Promise((r) => server.once('listening', r));
+    assert.deepEqual(await (await fetch(`http://127.0.0.1:${server.address().port}/vocab`)).json(), {
+      deviceNames: [], groupNames: [],
+    });
+  } finally {
+    server.close();
+  }
+});
