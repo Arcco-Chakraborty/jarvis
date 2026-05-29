@@ -38,6 +38,31 @@ test('keep one group on and everything else off', () => {
 test('"all lights off" is the group, not all_off', () => {
   assert.deepEqual(m('all lights off'), { domain: 'switch', action: 'off', target: 'lights' });
 });
+test('turn off all lights except a device -> all_off_except scoped to the group', () => {
+  assert.deepEqual(m('turn off all lights except tubelight'), {
+    domain: 'switch', action: 'all_off_except', target: 'tubelight', scope: 'lights',
+  });
+});
+test('turn off all lights except "the" device', () => {
+  assert.deepEqual(m('turn off all lights except the spotlight'), {
+    domain: 'switch', action: 'all_off_except', target: 'spotlight', scope: 'lights',
+  });
+});
+test('turn off everything except a device -> global all_off_except (no scope)', () => {
+  assert.deepEqual(m('turn off everything except the tubelight'), {
+    domain: 'switch', action: 'all_off_except', target: 'tubelight',
+  });
+});
+test('all fans off except a fan -> scoped to fans', () => {
+  assert.deepEqual(m('turn off all fans except fan 1'), {
+    domain: 'switch', action: 'all_off_except', target: 'fan 1', scope: 'fans',
+  });
+});
+test('"keep only X on" (no "rest off") -> keep_only', () => {
+  assert.deepEqual(m('keep only the tubelight on'), {
+    domain: 'switch', action: 'keep_only', target: 'tubelight',
+  });
+});
 test('all_off via everything', () => {
   assert.deepEqual(m('everything off'), { domain: 'switch', action: 'all_off' });
 });

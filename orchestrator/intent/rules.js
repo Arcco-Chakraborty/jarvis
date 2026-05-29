@@ -36,14 +36,29 @@ function maxDist(len) {
   return len <= 4 ? 0 : Math.min(2, Math.floor(len / 4));
 }
 
-// Resolve a target from the normalized tokens.
-// Groups: exact only. Devices: fuzzy within maxDist. An exact group beats a fuzzy device.
-function findTarget(tokens, deviceNames, groupNames) {
+// Adjacent 1- and 2-token windows (so 'fan 1' / 'night light' match as one name).
+function windowsOf(tokens) {
   const windows = [];
   for (let i = 0; i < tokens.length; i++) {
     windows.push(tokens[i]);
     if (i + 1 < tokens.length) windows.push(tokens[i] + tokens[i + 1]);
   }
+  return windows;
+}
+
+// First group name present in the tokens (exact, space-stripped).
+function findGroup(tokens, groupNames) {
+  const windows = windowsOf(tokens);
+  for (const g of groupNames) {
+    if (windows.includes(g.replace(/\s+/g, ''))) return g;
+  }
+  return null;
+}
+
+// Resolve a target from the normalized tokens.
+// Groups: exact only. Devices: fuzzy within maxDist. An exact group beats a fuzzy device.
+function findTarget(tokens, deviceNames, groupNames) {
+  const windows = windowsOf(tokens);
 
   for (const g of groupNames) {
     if (windows.includes(g.replace(/\s+/g, ''))) return g;
@@ -75,13 +90,34 @@ export function matchSwitchCommand(text, vocab) {
   const { deviceNames = [], groupNames = [] } = vocab ?? {};
   const tokens = norm.split(' ').filter(Boolean);
   const target = findTarget(tokens, deviceNames, groupNames);
+  const isOff = /\boff\b/.test(norm) || /\bturn of\b/.test(norm);
+
+  // "turn off all <group> except <device>" / "turn off everything except <device>".
+  // The kept device is left untouched; only the rest (scoped to a group, or all) go off.
+  const exceptRe = /\b(?:except(?:\s+for)?|but not|apart from|besides|other than)\b/;
+  if (exceptRe.test(norm) && isOff) {
+    const parts = norm.split(exceptRe);
+    const keepTokens = (parts[parts.length - 1] || '').split(' ').filter(Boolean);
+    const keep = findTarget(keepTokens, deviceNames, groupNames);
+    if (keep) {
+      const scope = findGroup((parts[0] || '').split(' ').filter(Boolean), groupNames);
+      return scope
+        ? { domain: 'switch', action: 'all_off_except', target: keep, scope }
+        : { domain: 'switch', action: 'all_off_except', target: keep };
+    }
+  }
 
   if (
     target &&
     /\bon\b/.test(norm) &&
     /\b(rest|others|everything else|all else|other ones)\b/.test(norm) &&
-    (/\boff\b/.test(norm) || /\bturn of\b/.test(norm))
+    isOff
   ) {
+    return { domain: 'switch', action: 'keep_only', target };
+  }
+
+  // "keep only the <target> on" (no explicit "rest off") -> keep_only.
+  if (target && /\bonly\b/.test(norm) && /\bon\b/.test(norm) && !isOff && !isQuestion) {
     return { domain: 'switch', action: 'keep_only', target };
   }
 

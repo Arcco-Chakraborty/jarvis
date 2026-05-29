@@ -7,6 +7,7 @@ const STATUS_BY_TYPE = {
   awake: 'awake',
   recording: 'recording',
   transcript: 'transcribing',
+  unrecognized: 'awake',
   idle: 'idle',
 };
 

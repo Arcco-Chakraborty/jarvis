@@ -89,6 +89,37 @@ test('keep_only group turns group members on and all other switches off', async 
   registry.close();
 });
 
+test('all_off_except scoped to a group: turns off other group members, leaves target and non-group untouched', async () => {
+  const board = fakeBoard();
+  const registry = reg();
+  const res = await route(
+    { domain: 'switch', action: 'all_off_except', target: 'tubelight', scope: 'lights' },
+    { board, registry },
+  );
+  // Only the OTHER lights are turned off; tubelight (the kept one) and fans/socket are untouched.
+  assert.deepEqual(board.calls, [
+    ['spotlight', false], ['rgb light', false], ['night light', false],
+  ]);
+  assert.deepEqual(res, { ok: true, speak: 'Lights off, except Tubelight.' });
+  registry.close();
+});
+
+test('all_off_except global (no scope): turns off everything but the target', async () => {
+  const board = fakeBoard();
+  const registry = reg();
+  const res = await route(
+    { domain: 'switch', action: 'all_off_except', target: 'tubelight' },
+    { board, registry },
+  );
+  assert.deepEqual(board.calls, [
+    ['fan 1', false], ['fan 2', false],
+    ['spotlight', false], ['rgb light', false], ['night light', false],
+    ['socket', false], ['spare', false],
+  ]);
+  assert.deepEqual(res, { ok: true, speak: 'Everything off, except Tubelight.' });
+  registry.close();
+});
+
 test('all_off calls board.allOff', async () => {
   const board = fakeBoard();
   const registry = reg();

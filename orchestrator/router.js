@@ -14,6 +14,23 @@ export async function route(intent, { board, registry }) {
       return { ok: true, speak: 'Everything is off.' };
     }
 
+    if (intent.action === 'all_off_except') {
+      const keep = groupNames.includes(intent.target)
+        ? new Set(registry.getSwitchNamesByGroup(intent.target))
+        : new Set([intent.target]);
+      const channels =
+        intent.scope && groupNames.includes(intent.scope)
+          ? registry.getSwitchNamesByGroup(intent.scope)
+          : registry.getSwitchNamesByChannel();
+      for (const name of channels) {
+        if (!keep.has(name)) await board.set(name, false);
+      }
+      const scopeLabel = intent.scope && groupNames.includes(intent.scope)
+        ? capitalize(intent.scope)
+        : 'Everything';
+      return { ok: true, speak: `${scopeLabel} off, except ${capitalize(intent.target)}.` };
+    }
+
     if (intent.action === 'keep_only') {
       const isGroup = groupNames.includes(intent.target);
       const keep = isGroup

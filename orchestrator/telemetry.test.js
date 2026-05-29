@@ -18,6 +18,13 @@ test('recordVoiceEvent maps type -> status and sets lastEventAt', () => {
   assert.equal(s.lastTranscript, 'turn off the tubelight');
 });
 
+test('unrecognized event returns the orb to the awake state', () => {
+  const tel = createTelemetry();
+  tel.recordVoiceEvent({ type: 'recording' });
+  tel.recordVoiceEvent({ type: 'unrecognized' });
+  assert.equal(tel.voiceSnapshot().status, 'awake');
+});
+
 test('wake_score updates score/threshold without changing status', () => {
   const tel = createTelemetry();
   tel.recordVoiceEvent({ type: 'listening' });
