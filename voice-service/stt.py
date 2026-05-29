@@ -85,6 +85,7 @@ class VoskSTT:
         self.sample_rate = config.sample_rate
         self.record_seconds = config.record_seconds
         self._grammar = json.dumps(self.phrases + ["[unk]"])
+        self.min_conf = getattr(config, "min_confidence", 0.6)
 
     def listen(self, max_initial_silence=5.0, max_utterance=12.0):
         from grammar import normalize_transcript
@@ -94,7 +95,8 @@ class VoskSTT:
             stdout=subprocess.PIPE,
         )
         rec = self._KaldiRecognizer(self.model, self.sample_rate, self._grammar)
-        text = ""
+        rec.SetWords(True)
+        result = None
         started = False
         t0 = time.monotonic()
         try:
@@ -103,7 +105,7 @@ class VoskSTT:
                 if not chunk:
                     break
                 if rec.AcceptWaveform(chunk):
-                    text = json.loads(rec.Result()).get("text", "")
+                    result = json.loads(rec.Result())
                     break
                 if json.loads(rec.PartialResult()).get("partial"):
                     started = True
@@ -111,7 +113,7 @@ class VoskSTT:
                 if not started and elapsed >= max_initial_silence:
                     break
                 if elapsed >= max_utterance:
-                    text = json.loads(rec.FinalResult()).get("text", "")
+                    result = json.loads(rec.FinalResult())
                     break
         finally:
             proc.terminate()
@@ -119,9 +121,11 @@ class VoskSTT:
                 proc.wait(timeout=1)
             except subprocess.TimeoutExpired:
                 proc.kill()
-        text = (text or "").strip()
-        if not text or text == "[unk]":
+        if not result:
             return ""
+        text, conf = utterance_text_conf(result)
+        if not text or text == "[unk]" or conf < self.min_conf:
+            return ""  # ambient noise / irrelevant / low-confidence
         return normalize_transcript(text, self.spoken_to_name)
 
     def transcribe(self):
