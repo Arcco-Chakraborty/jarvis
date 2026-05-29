@@ -68,7 +68,8 @@ def build_grammar(vocab):
             add(f"turn off all {g} except the {sd}")
             add(f"turn off all {g} except {sd}")
 
-    for p in ("all off", "everything off", "turn everything off", "turn off everything"):
+    for p in ("all off", "everything off", "turn everything off", "turn off everything",
+              "all on", "everything on", "turn everything on", "turn on everything"):
         add(p)
 
     return phrases, spoken_to_name

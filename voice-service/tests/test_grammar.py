@@ -23,7 +23,8 @@ class GrammarTest(unittest.TestCase):
         for p in [
             "turn off the fan one", "fan one on", "is the tube light on",
             "turn off the tube light", "turn off the r g b light", "lights off", "turn on the lights",
-            "everything off", "keep the lights on rest off",
+            "everything off", "everything on", "all on", "turn everything on",
+            "keep the lights on rest off",
             "switch off the tube light", "turn the tube light on",
             "switch on the lights", "turn the lights off",
             "turn off all lights except the tube light",

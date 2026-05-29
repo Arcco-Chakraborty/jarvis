@@ -81,8 +81,17 @@ test('wake word is stripped', () => {
 test('gibberish is null', () => {
   assert.equal(m('make me a sandwich'), null);
 });
-test('"everything on" is null (no all_on)', () => {
-  assert.equal(m('everything on'), null);
+test('all_on via everything', () => {
+  assert.deepEqual(m('turn everything on'), { domain: 'switch', action: 'all_on' });
+});
+test('all_on via all', () => {
+  assert.deepEqual(m('all on'), { domain: 'switch', action: 'all_on' });
+});
+test('"everything on" -> all_on', () => {
+  assert.deepEqual(m('everything on'), { domain: 'switch', action: 'all_on' });
+});
+test('"all lights on" is still the group, not all_on', () => {
+  assert.deepEqual(m('all lights on'), { domain: 'switch', action: 'on', target: 'lights' });
 });
 
 test('levenshtein computes edit distance', () => {

@@ -144,9 +144,13 @@ export function matchSwitchCommand(text, vocab) {
 
   if (target) return { domain: 'switch', action, target };
 
-  // all_off: off + no specific target + a global word (fuzzy<=1 on the long word "everything").
-  if (action === 'off' && (/\ball\b/.test(norm) || tokens.some((t) => levenshtein(t, 'everything') <= 1))) {
+  // all_off / all_on: no specific target + a global word (fuzzy<=1 on the long word "everything").
+  const isGlobal = /\ball\b/.test(norm) || tokens.some((t) => levenshtein(t, 'everything') <= 1);
+  if (action === 'off' && isGlobal) {
     return { domain: 'switch', action: 'all_off' };
+  }
+  if (action === 'on' && isGlobal) {
+    return { domain: 'switch', action: 'all_on' };
   }
   return null;
 }

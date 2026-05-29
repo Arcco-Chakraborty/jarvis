@@ -120,6 +120,18 @@ test('all_off_except global (no scope): turns off everything but the target', as
   registry.close();
 });
 
+test('all_on turns every channel on', async () => {
+  const board = fakeBoard();
+  const registry = reg();
+  const res = await route({ domain: 'switch', action: 'all_on' }, { board, registry });
+  assert.deepEqual(board.calls, [
+    ['fan 1', true], ['fan 2', true], ['tubelight', true], ['spotlight', true],
+    ['rgb light', true], ['night light', true], ['socket', true], ['spare', true],
+  ]);
+  assert.deepEqual(res, { ok: true, speak: 'Everything is on.' });
+  registry.close();
+});
+
 test('all_off calls board.allOff', async () => {
   const board = fakeBoard();
   const registry = reg();

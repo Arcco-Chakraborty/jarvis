@@ -14,6 +14,13 @@ export async function route(intent, { board, registry }) {
       return { ok: true, speak: 'Everything is off.' };
     }
 
+    if (intent.action === 'all_on') {
+      for (const name of registry.getSwitchNamesByChannel()) {
+        await board.set(name, true);
+      }
+      return { ok: true, speak: 'Everything is on.' };
+    }
+
     if (intent.action === 'all_off_except') {
       const keep = groupNames.includes(intent.target)
         ? new Set(registry.getSwitchNamesByGroup(intent.target))
