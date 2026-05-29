@@ -29,6 +29,10 @@ def build_grammar(vocab):
         add(f"{sd} off")
         add(f"is the {sd} on")
         add(f"keep the {sd} on rest off")
+        add(f"switch on the {sd}")
+        add(f"switch off the {sd}")
+        add(f"turn the {sd} on")
+        add(f"turn the {sd} off")
 
     for g in groups:
         add(f"turn on the {g}")
@@ -36,6 +40,10 @@ def build_grammar(vocab):
         add(f"{g} on")
         add(f"{g} off")
         add(f"keep the {g} on rest off")
+        add(f"switch on the {g}")
+        add(f"switch off the {g}")
+        add(f"turn the {g} on")
+        add(f"turn the {g} off")
 
     for p in ("all off", "everything off", "turn everything off", "turn off everything"):
         add(p)

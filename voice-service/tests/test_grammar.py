@@ -24,6 +24,8 @@ class GrammarTest(unittest.TestCase):
             "turn off the fan one", "fan one on", "is the tubelight on",
             "turn off the rgb light", "lights off", "turn on the lights",
             "everything off", "keep the lights on rest off",
+            "switch off the tubelight", "turn the tubelight on",
+            "switch on the lights", "turn the lights off",
         ]:
             self.assertIn(p, phrases)
         self.assertEqual(mapping["fan one"], "fan 1")
