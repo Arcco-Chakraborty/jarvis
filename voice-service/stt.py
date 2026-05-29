@@ -1,12 +1,20 @@
 import json
+import os
 import re
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
 from urllib.request import urlopen
 
 _ON_OFF = re.compile(r"\b(on|off)\b")
+_DEBUG = bool(os.environ.get("VOICE_DEBUG"))
+
+
+def _debug(msg):
+    if _DEBUG:
+        print(f"[stt] {msg}", file=sys.stderr, flush=True)
 
 
 def looks_like_command(text):
@@ -131,13 +139,17 @@ class VoskSTT:
             except subprocess.TimeoutExpired:
                 proc.kill()
         if not result:
+            _debug("silence (no speech)")
             return None  # no speech detected -> silence, end the conversation
         text, conf = utterance_text_conf(result)
         if not text or text == "[unk]" or conf < self.min_conf:
+            _debug(f"REJECT heard={text!r} conf={conf:.2f} (min {self.min_conf})")
             return ""  # heard ambient noise / low-confidence -> not understood, retry
         norm = normalize_transcript(text, self.spoken_to_name)
         if not looks_like_command(norm):
+            _debug(f"REJECT filler heard={text!r} conf={conf:.2f}")
             return ""  # stray filler (e.g. "the") -> not a command, retry
+        _debug(f"ACCEPT {norm!r} conf={conf:.2f}")
         return norm
 
     def transcribe(self):
