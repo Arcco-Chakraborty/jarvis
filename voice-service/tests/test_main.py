@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from main import handle_text
+from main import handle_text, run_conversation
 from orchestrator import CommandResult
 
 
@@ -40,6 +40,25 @@ class HandleTextTest(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertEqual(client.texts, ["lights off"])
         self.assertEqual(speaker.spoken, ["heard lights off"])
+
+
+class RunConversationTest(unittest.TestCase):
+    def test_handles_commands_until_silence(self):
+        seq = iter(["turn off the tubelight", "lights on", ""])
+        handled = []
+        run_conversation(lambda: next(seq), handled.append, followup_seconds=5)
+        self.assertEqual(handled, ["turn off the tubelight", "lights on"])
+
+    def test_one_shot_when_followup_zero(self):
+        seq = iter(["a", "b"])
+        handled = []
+        run_conversation(lambda: next(seq), handled.append, followup_seconds=0)
+        self.assertEqual(handled, ["a"])
+
+    def test_returns_immediately_on_silence(self):
+        handled = []
+        run_conversation(lambda: "", handled.append, followup_seconds=5)
+        self.assertEqual(handled, [])
 
 
 if __name__ == "__main__":

@@ -18,6 +18,22 @@ def handle_text(text, client, speaker):
     return result
 
 
+def run_conversation(listen_fn, handle_fn, followup_seconds, reporter=None):
+    """Take commands turn-by-turn until a silent turn (empty text), then return.
+    followup_seconds <= 0 -> one-shot (handle one command, then return)."""
+    while True:
+        if reporter is not None:
+            reporter.emit("recording")
+        text = listen_fn()
+        if not text:
+            return
+        if reporter is not None:
+            reporter.emit("transcript", text=text)
+        handle_fn(text)
+        if followup_seconds <= 0:
+            return
+
+
 def run_loop(config, client=None, stt=None, wake_listener=None, speaker=None, reporter=None):
     client = client or OrchestratorClient(config.orchestrator_url, config.request_timeout_s)
     reporter = reporter or build_reporter(config)
@@ -34,12 +50,20 @@ def run_loop(config, client=None, stt=None, wake_listener=None, speaker=None, re
         reporter.emit("listening")
         if not wake_listener.wait():
             continue
-        reporter.emit("recording")
-        text = stt.transcribe()
-        if not text:
-            break
-        reporter.emit("transcript", text=text)
-        handle_text(text, client, speaker)
+        reporter.emit("awake")
+        if hasattr(stt, "listen"):
+            run_conversation(
+                listen_fn=lambda: stt.listen(config.followup_seconds, config.max_utterance_seconds),
+                handle_fn=lambda t: handle_text(t, client, speaker),
+                followup_seconds=config.followup_seconds,
+                reporter=reporter,
+            )
+        else:
+            text = stt.transcribe()
+            if not text:
+                break
+            reporter.emit("transcript", text=text)
+            handle_text(text, client, speaker)
         reporter.emit("idle")
 
 
