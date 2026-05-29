@@ -21,6 +21,8 @@ class VoiceConfig:
     audio_player: str = "aplay"
     vosk_model_path: str = "voice-service/models/vosk-model-small-en-us-0.15"
     request_timeout_s: float = 5.0
+    followup_seconds: float = 5.0
+    max_utterance_seconds: float = 12.0
 
 
 def load_config(env=os.environ):
@@ -42,4 +44,6 @@ def load_config(env=os.environ):
         audio_player=env.get("AUDIO_PLAYER", "aplay"),
         vosk_model_path=env.get("VOSK_MODEL_PATH", "voice-service/models/vosk-model-small-en-us-0.15"),
         request_timeout_s=float(env.get("VOICE_REQUEST_TIMEOUT_S", "5")),
+        followup_seconds=float(env.get("VOICE_FOLLOWUP_SECONDS", "5")),
+        max_utterance_seconds=float(env.get("VOICE_MAX_UTTERANCE_SECONDS", "12")),
     )
