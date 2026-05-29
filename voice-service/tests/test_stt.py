@@ -4,7 +4,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from stt import fetch_vocab, utterance_text_conf
+from stt import fetch_vocab, utterance_text_conf, looks_like_command
 
 
 class FakeResp:
@@ -58,6 +58,21 @@ class UtteranceConfTest(unittest.TestCase):
 
     def test_text_without_word_confs(self):
         self.assertEqual(utterance_text_conf({"text": "lights off"}), ("lights off", 1.0))
+
+
+class LooksLikeCommandTest(unittest.TestCase):
+    def test_real_commands_pass(self):
+        for t in ["turn off the tubelight", "lights on", "fans off",
+                  "is the tubelight on", "turn off all lights except tubelight"]:
+            self.assertTrue(looks_like_command(t), t)
+
+    def test_stray_fillers_rejected(self):
+        for t in ["", "the", "the the", "a", "uh", "tubelight"]:
+            self.assertFalse(looks_like_command(t), t)
+
+    def test_on_off_must_be_whole_words(self):
+        # substrings like the 'on' in 'iron' must not count as a command
+        self.assertFalse(looks_like_command("iron"))
 
 
 if __name__ == "__main__":

@@ -30,19 +30,26 @@ def build_grammar(vocab):
         if p not in phrases:
             phrases.append(p)
 
+    spoken_devices = []
     for name in devices:
         sd = to_spoken(name)
         spoken_to_name[sd] = name
+        spoken_devices.append(sd)
         add(f"turn on the {sd}")
         add(f"turn off the {sd}")
         add(f"{sd} on")
         add(f"{sd} off")
         add(f"is the {sd} on")
         add(f"keep the {sd} on rest off")
+        add(f"keep only the {sd} on")
+        add(f"keep only {sd} on")
         add(f"switch on the {sd}")
         add(f"switch off the {sd}")
         add(f"turn the {sd} on")
         add(f"turn the {sd} off")
+        # "turn off everything except <device>" (global exclusion)
+        add(f"turn off everything except the {sd}")
+        add(f"turn off everything except {sd}")
 
     for g in groups:
         add(f"turn on the {g}")
@@ -50,10 +57,16 @@ def build_grammar(vocab):
         add(f"{g} on")
         add(f"{g} off")
         add(f"keep the {g} on rest off")
+        add(f"keep only the {g} on")
+        add(f"keep only {g} on")
         add(f"switch on the {g}")
         add(f"switch off the {g}")
         add(f"turn the {g} on")
         add(f"turn the {g} off")
+        # "turn off all <group> except <device>" (group-scoped exclusion)
+        for sd in spoken_devices:
+            add(f"turn off all {g} except the {sd}")
+            add(f"turn off all {g} except {sd}")
 
     for p in ("all off", "everything off", "turn everything off", "turn off everything"):
         add(p)

@@ -44,7 +44,8 @@ class HandleTextTest(unittest.TestCase):
 
 class RunConversationTest(unittest.TestCase):
     def test_handles_commands_until_silence(self):
-        seq = iter(["turn off the tubelight", "lights on", ""])
+        # None signals silence (no speech) -> end the conversation.
+        seq = iter(["turn off the tubelight", "lights on", None])
         handled = []
         run_conversation(lambda: next(seq), handled.append, followup_seconds=5)
         self.assertEqual(handled, ["turn off the tubelight", "lights on"])
@@ -57,8 +58,30 @@ class RunConversationTest(unittest.TestCase):
 
     def test_returns_immediately_on_silence(self):
         handled = []
-        run_conversation(lambda: "", handled.append, followup_seconds=5)
+        run_conversation(lambda: None, handled.append, followup_seconds=5)
         self.assertEqual(handled, [])
+
+    def test_unrecognized_retries_then_handles(self):
+        # "" means heard-but-not-understood: say "didn't catch that" and try again,
+        # don't drop back to sleep.
+        seq = iter(["", "lights on", None])
+        handled, misses = [], []
+        run_conversation(
+            lambda: next(seq), handled.append, followup_seconds=5,
+            unrecognized_fn=lambda: misses.append(1), max_unrecognized=3,
+        )
+        self.assertEqual(handled, ["lights on"])
+        self.assertEqual(len(misses), 1)
+
+    def test_bounded_retries_on_repeated_unrecognized(self):
+        # Continuous noise must not loop forever: give up after max_unrecognized misses.
+        handled, misses = [], []
+        run_conversation(
+            lambda: "", handled.append, followup_seconds=5,
+            unrecognized_fn=lambda: misses.append(1), max_unrecognized=2,
+        )
+        self.assertEqual(handled, [])
+        self.assertEqual(len(misses), 2)
 
 
 if __name__ == "__main__":

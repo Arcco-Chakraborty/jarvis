@@ -18,15 +18,31 @@ def handle_text(text, client, speaker):
     return result
 
 
-def run_conversation(listen_fn, handle_fn, followup_seconds, reporter=None):
-    """Take commands turn-by-turn until a silent turn (empty text), then return.
+def run_conversation(listen_fn, handle_fn, followup_seconds, reporter=None,
+                     unrecognized_fn=None, max_unrecognized=3):
+    """Take commands turn-by-turn. listen_fn returns:
+      None -> silence (no speech): end the conversation, re-arm the wake word.
+      ""   -> heard speech but not a command: say so and retry, up to
+              max_unrecognized consecutive misses (so noise can't loop forever).
+      str  -> a command: dispatch it.
     followup_seconds <= 0 -> one-shot (handle one command, then return)."""
+    misses = 0
     while True:
         if reporter is not None:
             reporter.emit("recording")
         text = listen_fn()
-        if not text:
+        if text is None:
             return
+        if not text:
+            misses += 1
+            if reporter is not None:
+                reporter.emit("unrecognized")
+            if unrecognized_fn is not None:
+                unrecognized_fn()
+            if misses >= max_unrecognized:
+                return
+            continue
+        misses = 0
         if reporter is not None:
             reporter.emit("transcript", text=text)
         handle_fn(text)
@@ -45,7 +61,7 @@ def run_loop(config, client=None, stt=None, wake_listener=None, speaker=None, re
     if config.wake_backend == "manual":
         print(f"JARVIS voice service ready. Type commands after '{config.wake_word}', Ctrl-D to exit.")
     else:
-        print("JARVIS voice service ready. Say 'hey jarvis', then speak the command during the recording window.")
+        print("JARVIS voice service ready. Say 'jarvis', then speak your command.")
     while True:
         reporter.emit("listening")
         if not wake_listener.wait():
@@ -57,6 +73,8 @@ def run_loop(config, client=None, stt=None, wake_listener=None, speaker=None, re
                 handle_fn=lambda t: handle_text(t, client, speaker),
                 followup_seconds=config.followup_seconds,
                 reporter=reporter,
+                unrecognized_fn=lambda: speaker.speak("Sorry, I didn't catch that."),
+                max_unrecognized=config.max_unrecognized,
             )
         else:
             text = stt.transcribe()

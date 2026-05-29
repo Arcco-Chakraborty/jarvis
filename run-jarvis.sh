@@ -6,7 +6,7 @@
 # your session. Agent-started background processes get killed between turns.
 #
 # Open http://localhost:3000/ in a browser to watch the dashboard while you speak.
-# Say "hey jarvis", then your command. Ctrl-C stops the voice loop (orchestrator keeps
+# Say "jarvis", then your command. Ctrl-C stops the voice loop (orchestrator keeps
 # running so the dashboard stays live; stop it with: pkill -f orchestrator/server.js).
 set -uo pipefail
 cd "$(dirname "$0")"
@@ -26,5 +26,5 @@ else
 fi
 
 export VOICE_WAKE_THRESHOLD="${VOICE_WAKE_THRESHOLD:-0.3}"
-echo "voice wake threshold = $VOICE_WAKE_THRESHOLD ; say 'hey jarvis', then a command. Ctrl-C to stop."
+echo "voice wake threshold = $VOICE_WAKE_THRESHOLD ; say 'jarvis', then a command. Ctrl-C to stop."
 exec voice-service/run-full.sh

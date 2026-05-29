@@ -24,6 +24,7 @@ class VoiceConfig:
     followup_seconds: float = 5.0
     max_utterance_seconds: float = 12.0
     min_confidence: float = 0.6
+    max_unrecognized: int = 3
 
 
 def load_config(env=os.environ):
@@ -48,4 +49,5 @@ def load_config(env=os.environ):
         followup_seconds=float(env.get("VOICE_FOLLOWUP_SECONDS", "5")),
         max_utterance_seconds=float(env.get("VOICE_MAX_UTTERANCE_SECONDS", "12")),
         min_confidence=float(env.get("VOICE_MIN_CONFIDENCE", "0.6")),
+        max_unrecognized=int(env.get("VOICE_MAX_RETRIES", "3")),
     )

@@ -1,9 +1,18 @@
 import json
+import re
 import subprocess
 import tempfile
 import time
 from pathlib import Path
 from urllib.request import urlopen
+
+_ON_OFF = re.compile(r"\b(on|off)\b")
+
+
+def looks_like_command(text):
+    """A real command always contains a standalone 'on' or 'off' (every grammar
+    phrase does). Rejects stray filler the recognizer emits from noise (e.g. 'the')."""
+    return bool(_ON_OFF.search(text or ""))
 
 
 class ManualTextInput:
@@ -122,11 +131,14 @@ class VoskSTT:
             except subprocess.TimeoutExpired:
                 proc.kill()
         if not result:
-            return ""
+            return None  # no speech detected -> silence, end the conversation
         text, conf = utterance_text_conf(result)
         if not text or text == "[unk]" or conf < self.min_conf:
-            return ""  # ambient noise / irrelevant / low-confidence
-        return normalize_transcript(text, self.spoken_to_name)
+            return ""  # heard ambient noise / low-confidence -> not understood, retry
+        norm = normalize_transcript(text, self.spoken_to_name)
+        if not looks_like_command(norm):
+            return ""  # stray filler (e.g. "the") -> not a command, retry
+        return norm
 
     def transcribe(self):
         return self.listen(max_initial_silence=self.record_seconds)
