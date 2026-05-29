@@ -63,6 +63,15 @@ def fetch_vocab(orchestrator_url, opener=urlopen):
         return {"deviceNames": [], "groupNames": []}
 
 
+def utterance_text_conf(result):
+    """Vosk Result JSON dict -> (text, mean word confidence)."""
+    words = result.get("result") or []
+    text = (result.get("text") or "").strip()
+    if words:
+        return text, sum(float(w.get("conf", 0.0)) for w in words) / len(words)
+    return text, (1.0 if text else 0.0)
+
+
 class VoskSTT:
     def __init__(self, config, vocab=None):
         from vosk import Model, KaldiRecognizer
