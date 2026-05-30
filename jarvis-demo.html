@@ -488,14 +488,55 @@
   .wexpand .ic { display: inline-block; transition: transform 0.35s ease; line-height: 1; }
   .widget.expanded .wexpand .ic { transform: rotate(180deg); }
 
-  /* devices widget body: compact 4-col icon grid, expands to 2-col with names */
+  /* devices widget body: compact 4-col icon grid; expanded -> centered modal */
   .devbody {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 8px;
     transition: grid-template-columns 0.35s ease;
   }
-  .widget.expanded .devbody { grid-template-columns: repeat(2, 1fr); }
+  .widget.expanded .devbody { grid-template-columns: repeat(4, 1fr); gap: 14px; }
+
+  /* fullscreen backdrop for modal expand */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    z-index: 150;
+    background: radial-gradient(circle at 50% 50%, rgba(2,9,15,0.55), rgba(2,9,15,0.92));
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.35s ease;
+  }
+  body.modal-open .modal-backdrop { opacity: 1; pointer-events: auto; }
+
+  /* widget becomes a centered modal when expanded */
+  @keyframes modalOpen {
+    from { transform: translate(-50%, -50%) scale(0.86); opacity: 0; }
+    to   { transform: translate(-50%, -50%) scale(1);    opacity: 1; }
+  }
+  .widget.expanded {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(820px, 92vw);
+    max-height: 86vh;
+    overflow: auto;
+    z-index: 200;
+    padding: 28px 28px 24px;
+    box-shadow: 0 0 80px rgba(79,230,255,0.4), inset 0 0 40px rgba(79,230,255,0.12);
+    border-color: var(--cyan);
+    animation: modalOpen 0.35s cubic-bezier(.2,.7,.3,1);
+  }
+  .widget.expanded .wtitle { font-size: 0.84rem; margin-bottom: 18px; }
+  .widget.expanded .wexpand { top: 18px; right: 18px; width: 28px; height: 28px; font-size: 1rem; }
+  .widget.expanded .device { padding: 18px 14px 22px; }
+  .widget.expanded .device .ico { height: 56px; }
+  .widget.expanded .device .ico svg { width: 48px; height: 48px; }
+  .widget.expanded .device .nm { display: block; font-size: 0.78rem; letter-spacing: 0.24em; margin-top: 12px; }
+  .widget.expanded .device .st { display: block; font-size: 0.62rem; letter-spacing: 0.3em; margin-top: 4px; }
+  @media (max-width: 720px) {
+    .widget.expanded .devbody { grid-template-columns: repeat(2, 1fr); }
+  }
 
   .device {
     position: relative;
@@ -744,6 +785,9 @@
 
   <!-- main holographic stage -->
   <canvas id="stage"></canvas>
+
+  <!-- modal backdrop (shown when a widget is expanded) -->
+  <div class="modal-backdrop" onclick="closeAnyModal()"></div>
 
   <div class="spark-cursor" id="cursor"></div>
 
@@ -1022,9 +1066,19 @@ function toggleDev(el) {
 window.toggleDev = toggleDev;
 
 function toggleDevExpand() {
-  document.getElementById("w-devices").classList.toggle("expanded");
+  const w = document.getElementById("w-devices");
+  const open = w.classList.toggle("expanded");
+  document.body.classList.toggle("modal-open", open);
 }
+function closeAnyModal() {
+  document.querySelectorAll(".widget.expanded").forEach((w) => w.classList.remove("expanded"));
+  document.body.classList.remove("modal-open");
+}
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && document.body.classList.contains("modal-open")) closeAnyModal();
+});
 window.toggleDevExpand = toggleDevExpand;
+window.closeAnyModal = closeAnyModal;
 
 function flipRandomDevice() {
   const devs = [...document.querySelectorAll(".device")];

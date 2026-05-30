@@ -191,6 +191,78 @@ test('voice routes tolerate missing telemetry', async () => {
   }
 });
 
+test('GET /system returns OS vitals as numbers', async () => {
+  await withServer(stubEsp32({}), async (base) => {
+    const res = await fetch(`${base}/system`);
+    assert.equal(res.status, 200);
+    const j = await res.json();
+    assert.equal(j.ok, true);
+    assert.equal(typeof j.cpu, 'number');
+    assert.equal(typeof j.mem, 'number');
+    assert.equal(typeof j.uptime, 'number');
+    assert.equal(typeof j.cores, 'number');
+    assert.ok(j.cpu >= 0 && j.cpu <= 100, 'cpu in [0,100]');
+    assert.ok(j.mem >= 0 && j.mem <= 100, 'mem in [0,100]');
+  });
+});
+
+test('GET /weather returns parsed Open-Meteo current via injected fetcher', async () => {
+  let urlSeen = '';
+  const weatherFetch = async (url) => {
+    urlSeen = url;
+    return {
+      ok: true,
+      json: async () => ({
+        current: { temperature_2m: 28.4, relative_humidity_2m: 51, wind_speed_10m: 11, weather_code: 0 },
+      }),
+    };
+  };
+  const server = buildApp({ esp32: stubEsp32({}), weatherFetch }).listen(0);
+  try {
+    await new Promise((r) => server.once('listening', r));
+    const body = await (await fetch(`http://127.0.0.1:${server.address().port}/weather`)).json();
+    assert.equal(body.ok, true);
+    assert.equal(body.temp, 28.4);
+    assert.equal(body.humid, 51);
+    assert.equal(body.wind, 11);
+    assert.equal(body.cond, 'CLEAR');
+    assert.ok(urlSeen.includes('open-meteo.com'), 'used open-meteo');
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /weather caches and only calls upstream once within TTL', async () => {
+  let calls = 0;
+  const weatherFetch = async () => {
+    calls++;
+    return { ok: true, json: async () => ({ current: { temperature_2m: 30, weather_code: 2 } }) };
+  };
+  const server = buildApp({ esp32: stubEsp32({}), weatherFetch }).listen(0);
+  try {
+    await new Promise((r) => server.once('listening', r));
+    const base = `http://127.0.0.1:${server.address().port}`;
+    await (await fetch(`${base}/weather`)).json();
+    await (await fetch(`${base}/weather`)).json();
+    await (await fetch(`${base}/weather`)).json();
+    assert.equal(calls, 1);
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /weather surfaces upstream errors as 502', async () => {
+  const weatherFetch = async () => { throw new Error('network down'); };
+  const server = buildApp({ esp32: stubEsp32({}), weatherFetch }).listen(0);
+  try {
+    await new Promise((r) => server.once('listening', r));
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/weather`);
+    assert.equal(res.status, 502);
+  } finally {
+    server.close();
+  }
+});
+
 test('GET /vocab returns the injected vocab', async () => {
   const vocab = { deviceNames: ['tubelight', 'fan 1'], groupNames: ['lights', 'fans'] };
   const server = buildApp({ esp32: stubEsp32({}), vocab }).listen(0);
