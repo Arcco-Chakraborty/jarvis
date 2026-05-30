@@ -311,10 +311,12 @@
   </div>
 
   <canvas id="stage"></canvas>
-  <div class="modal-backdrop" onclick="closeAnyModal()"></div>
   <div class="spark-cursor" id="cursor"></div>
 
   <div class="ui">
+    <!-- modal backdrop inside .ui so it shares the stacking context with the
+         widget being expanded (sibling-of-.ui would paint over the widget). -->
+    <div class="modal-backdrop" onclick="closeAnyModal()"></div>
     <header class="topbar">
       <div class="ident">
         <div class="brand">J<b>.</b>A<b>.</b>R<b>.</b>V<b>.</b>I<b>.</b>S</div>

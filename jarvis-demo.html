@@ -786,13 +786,13 @@
   <!-- main holographic stage -->
   <canvas id="stage"></canvas>
 
-  <!-- modal backdrop (shown when a widget is expanded) -->
-  <div class="modal-backdrop" onclick="closeAnyModal()"></div>
-
   <div class="spark-cursor" id="cursor"></div>
 
   <!-- HUD -->
   <div class="ui">
+    <!-- modal backdrop lives INSIDE .ui so it shares the stacking context
+         with the widget being expanded (otherwise it would paint over the widget). -->
+    <div class="modal-backdrop" onclick="closeAnyModal()"></div>
 
     <header class="topbar">
       <div class="ident">
