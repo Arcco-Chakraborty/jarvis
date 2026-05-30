@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeOpenApp } from './apps.js';
+import { makeOpenApp, buildAppCatalog } from './apps.js';
 
 const ALLOWLIST = {
   chrome: 'google-chrome',
@@ -47,15 +47,13 @@ test('openApp normalizes the lookup (lowercase + trim)', () => {
 });
 
 test('openApp returns ok:false with a friendly speak when the name is not allow-listed', () => {
-  let spawned = false;
   const openApp = makeOpenApp({
     allowlist: ALLOWLIST,
-    spawn: () => { spawned = true; return { unref: () => {} }; },
+    spawn: () => { throw new Error('ENOENT'); },
   });
   const r = openApp({ name: 'nethack' });
   assert.equal(r.ok, false);
   assert.match(r.speak, /don'?t know how to open nethack/i);
-  assert.equal(spawned, false);
 });
 
 test('openApp catches spawn errors and returns ok:false', () => {
@@ -73,4 +71,46 @@ test('openApp tolerates missing name', () => {
   const r = openApp({});
   assert.equal(r.ok, false);
   assert.match(r.speak, /don'?t know how to open/i);
+});
+
+test('buildAppCatalog merges discovered apps + aliases (aliases point to canonical entries)', async () => {
+  const discover = async () => ({ 'google chrome': 'google-chrome', 'firefox': 'firefox' });
+  const aliases  = { 'chrome': 'google chrome', 'browser': 'google chrome', 'editor': 'code-missing' };
+  const cat = await buildAppCatalog({ discover, aliases });
+  assert.equal(cat['google chrome'], 'google-chrome');     // discovered as-is
+  assert.equal(cat['firefox'], 'firefox');                 // discovered as-is
+  assert.equal(cat['chrome'], 'google-chrome');            // alias resolved
+  assert.equal(cat['browser'], 'google-chrome');           // alias resolved
+  assert.equal(cat['editor'], undefined);                  // alias target missing -> dropped
+});
+
+test('openApp falls back to PATH for single-token unknown names', () => {
+  const calls = [];
+  const proc = { unref: () => {} };
+  const spawn = (bin, args, opts) => { calls.push({ bin, args, opts }); return proc; };
+  const openApp = makeOpenApp({ allowlist: { chrome: 'google-chrome' }, spawn });
+  const r = openApp({ name: 'htop' });
+  assert.equal(r.ok, true);
+  assert.equal(calls[0].bin, 'htop');
+  assert.deepEqual(calls[0].args, []);
+});
+
+test('openApp does NOT PATH-fall-back for multi-word names (would be ambiguous)', () => {
+  const openApp = makeOpenApp({
+    allowlist: { chrome: 'google-chrome' },
+    spawn: () => { throw new Error('should not spawn'); },
+  });
+  const r = openApp({ name: 'random app' });
+  assert.equal(r.ok, false);
+  assert.match(r.speak, /don'?t know/i);
+});
+
+test('openApp reports PATH-fallback spawn errors as ok:false', () => {
+  const openApp = makeOpenApp({
+    allowlist: {},
+    spawn: () => { throw new Error('ENOENT'); },
+  });
+  const r = openApp({ name: 'noprogram' });
+  assert.equal(r.ok, false);
+  assert.match(r.speak, /don'?t know/i);
 });
