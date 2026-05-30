@@ -1,5 +1,6 @@
 import argparse
 import sys
+import time
 
 from config import load_config
 from orchestrator import OrchestratorClient
@@ -98,6 +99,9 @@ def run_loop(config, client=None, stt=None, wake_listener=None, speaker=None, re
             reporter.emit("transcript", text=text)
             handle_text(text, client, speaker)
         reporter.emit("idle")
+        # Cooldown: let TTS audio + room echo dissipate so the wake listener
+        # doesn't re-fire on Jarvis's own voice ("won't shut up" loop).
+        time.sleep(config.post_conversation_cooldown_s)
 
 
 def main(argv=None):

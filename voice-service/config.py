@@ -25,6 +25,7 @@ class VoiceConfig:
     max_utterance_seconds: float = 12.0
     min_confidence: float = 0.4
     max_unrecognized: int = 3
+    post_conversation_cooldown_s: float = 1.2
 
 
 def load_config(env=os.environ):
@@ -50,4 +51,5 @@ def load_config(env=os.environ):
         max_utterance_seconds=float(env.get("VOICE_MAX_UTTERANCE_SECONDS", "12")),
         min_confidence=float(env.get("VOICE_MIN_CONFIDENCE", "0.4")),
         max_unrecognized=int(env.get("VOICE_MAX_RETRIES", "3")),
+        post_conversation_cooldown_s=float(env.get("VOICE_COOLDOWN_S", "1.2")),
     )
