@@ -5,7 +5,7 @@ function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export async function route(intent, { board, registry, openApp, media, window: win } = {}) {
+export async function route(intent, { board, registry, openApp, media, window: win, browser } = {}) {
   // PC domain: each sub-action goes to its injected capability.
   if (intent.domain === 'pc') {
     if (intent.action === 'open_app') {
@@ -21,8 +21,9 @@ export async function route(intent, { board, registry, openApp, media, window: w
         case 'volume_up':    return media.volumeUp();
         case 'volume_down':  return media.volumeDown();
         case 'mute':         return media.mute();
-        case 'set_volume':   return media.setVolume(intent.arg);
-        default:             return { ok: false, speak: "I don't know how to do that." };
+        case 'set_volume':    return media.setVolume(intent.arg);
+        case 'spotify_search': return media.playOnSpotify({ query: intent.arg });
+        default:              return { ok: false, speak: "I don't know how to do that." };
       }
     }
     if (intent.action === 'window') {
@@ -32,8 +33,14 @@ export async function route(intent, { board, registry, openApp, media, window: w
         case 'snap':     return win.snap({ dir: intent.arg });
         case 'minimize': return win.minimize();
         case 'close':    return win.close();
+        case 'split':    return win.splitWith({ a: intent.a, b: intent.b }, { openApp });
         default:         return { ok: false, speak: "I don't know how to do that." };
       }
+    }
+    if (intent.action === 'browser') {
+      if (!browser) return { ok: false, speak: 'Browser capability not configured.' };
+      if (intent.op === 'search') return browser.search({ query: intent.arg });
+      return { ok: false, speak: "I don't know how to do that." };
     }
     // shell is handled at the server layer (it needs the pending-confirmation slot).
     return { ok: false, speak: "I don't know how to do that." };

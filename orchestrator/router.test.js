@@ -198,3 +198,49 @@ test('unreachable board yields the error sentence', async () => {
   assert.deepEqual(res, { ok: false, speak: "I couldn't reach the smart switch." });
   registry.close();
 });
+
+test('pc.media spotify_search -> media.playOnSpotify', async () => {
+  const calls = [];
+  const media = { playOnSpotify: (a) => { calls.push(a); return { ok: true, speak: 'searching' }; } };
+  const registry = reg();
+  const res = await route(
+    { domain:'pc', action:'media', op:'spotify_search', arg:'discover weekly' },
+    { board: fakeBoard(), registry, media },
+  );
+  assert.deepEqual(calls, [{ query: 'discover weekly' }]);
+  assert.equal(res.ok, true);
+  registry.close();
+});
+
+test('pc.browser search -> browser.search', async () => {
+  const calls = [];
+  const browser = { search: (a) => { calls.push(a); return { ok: true, speak: 'searching' }; } };
+  const registry = reg();
+  const res = await route(
+    { domain:'pc', action:'browser', op:'search', arg:'cats' },
+    { board: fakeBoard(), registry, browser },
+  );
+  assert.deepEqual(calls, [{ query: 'cats' }]);
+  assert.equal(res.ok, true);
+  registry.close();
+});
+
+test('pc.window split -> window.splitWith with openApp + sleep injected', async () => {
+  const calls = [];
+  const win = {
+    splitWith: async (args, deps) => {
+      calls.push({ args, hasOpenApp: !!deps.openApp });
+      return { ok: true, speak: 'split done' };
+    },
+  };
+  const openApp = () => ({ ok: true, speak: 'opened' });
+  const registry = reg();
+  const res = await route(
+    { domain:'pc', action:'window', op:'split', a:'chrome', b:'code' },
+    { board: fakeBoard(), registry, window: win, openApp },
+  );
+  assert.equal(res.ok, true);
+  assert.deepEqual(calls[0].args, { a: 'chrome', b: 'code' });
+  assert.equal(calls[0].hasOpenApp, true);
+  registry.close();
+});
