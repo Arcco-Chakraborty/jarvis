@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.request import urlopen
 
 _ON_OFF = re.compile(r"\b(on|off)\b")
+_PC_VERB = re.compile(r"\b(open|launch|start)\b")
 _DEBUG = bool(os.environ.get("VOICE_DEBUG"))
 
 # Sentinel returned by listen() when the user said "stop" / "cancel" / "never mind".
@@ -23,9 +24,12 @@ def _debug(msg):
 
 
 def looks_like_command(text):
-    """A real command always contains a standalone 'on' or 'off' (every grammar
-    phrase does). Rejects stray filler the recognizer emits from noise (e.g. 'the')."""
-    return bool(_ON_OFF.search(text or ""))
+    """A real command always contains either a switch verb (on|off) or a PC
+    verb (open|launch|start). Rejects stray filler the recognizer emits from
+    noise (e.g. 'the')."""
+    if not text:
+        return False
+    return bool(_ON_OFF.search(text) or _PC_VERB.search(text))
 
 
 def has_target(text, targets):
@@ -120,7 +124,13 @@ class VoskSTT:
         self.min_conf = getattr(config, "min_confidence", 0.6)
         devices = (vocab.get("deviceNames") or [])
         groups = (vocab.get("groupNames") or [])
-        self._targets = {d.lower() for d in devices} | {g.lower() for g in groups} | {"everything", "all"}
+        apps = (vocab.get("appNames") or [])
+        self._targets = (
+            {d.lower() for d in devices}
+            | {g.lower() for g in groups}
+            | {a.lower() for a in apps}
+            | {"everything", "all"}
+        )
 
     def listen(self, max_initial_silence=5.0, max_utterance=12.0):
         from grammar import normalize_transcript

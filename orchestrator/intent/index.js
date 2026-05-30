@@ -1,10 +1,13 @@
 import { matchSwitchCommand } from './rules.js';
+import { matchPcCommand } from './pc.js';
 import { geminiClassify } from './gemini.js';
 
-// Parse + report which layer matched. Cascade: fuzzy rules (offline) -> Gemini fallback.
+// Parse + report which layer matched. Cascade: switch rules -> pc rules -> Gemini fallback.
 export async function parseWithSource(text, vocab, classify = geminiClassify) {
-  const m = matchSwitchCommand(text, vocab);
-  if (m) return { intent: m, via: 'rules' };
+  const s = matchSwitchCommand(text, vocab);
+  if (s) return { intent: s, via: 'rules' };
+  const p = matchPcCommand(text);
+  if (p) return { intent: p, via: 'rules' };
   const g = await classify(text, vocab);
   return { intent: g, via: g ? 'gemini' : null };
 }

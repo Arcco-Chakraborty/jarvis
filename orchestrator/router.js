@@ -5,7 +5,15 @@ function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export async function route(intent, { board, registry }) {
+export async function route(intent, { board, registry, openApp } = {}) {
+  // PC domain: dispatch to the injected capability (no board/registry needed).
+  if (intent.domain === 'pc') {
+    if (intent.action === 'open_app') {
+      if (!openApp) return { ok: false, speak: 'PC capability not configured.' };
+      return openApp({ name: intent.target });
+    }
+    return { ok: false, speak: "I don't know how to do that." };
+  }
   try {
     const groupNames = registry.getGroupNames();
 

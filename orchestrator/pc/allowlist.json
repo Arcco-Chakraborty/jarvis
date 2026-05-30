@@ -1,0 +1,14 @@
+{
+  "chrome": "google-chrome",
+  "google chrome": "google-chrome",
+  "firefox": "firefox",
+  "code": "code",
+  "vs code": "code",
+  "visual studio code": "code",
+  "terminal": "gnome-terminal",
+  "files": "nautilus",
+  "settings": "gnome-control-center",
+  "spotify": "spotify",
+  "vlc": "vlc",
+  "calculator": "gnome-calculator"
+}

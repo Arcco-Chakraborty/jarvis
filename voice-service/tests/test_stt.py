@@ -63,7 +63,8 @@ class UtteranceConfTest(unittest.TestCase):
 class LooksLikeCommandTest(unittest.TestCase):
     def test_real_commands_pass(self):
         for t in ["turn off the tubelight", "lights on", "fans off",
-                  "is the tubelight on", "turn off all lights except tubelight"]:
+                  "is the tubelight on", "turn off all lights except tubelight",
+                  "open chrome", "launch firefox", "start vs code"]:
             self.assertTrue(looks_like_command(t), t)
 
     def test_stray_fillers_rejected(self):
@@ -71,21 +72,23 @@ class LooksLikeCommandTest(unittest.TestCase):
             self.assertFalse(looks_like_command(t), t)
 
     def test_on_off_must_be_whole_words(self):
-        # substrings like the 'on' in 'iron' must not count as a command
+        # 'on' inside 'iron', 'open' as substring of 'opening', must not match
         self.assertFalse(looks_like_command("iron"))
+        self.assertFalse(looks_like_command("opening"))
 
 
 class HasTargetTest(unittest.TestCase):
-    TARGETS = {"tubelight", "lights", "fans", "fan 1", "everything", "all"}
+    TARGETS = {"tubelight", "lights", "fans", "fan 1", "everything", "all", "chrome", "firefox"}
 
     def test_real_commands_have_a_target(self):
-        for t in ["turn off the tubelight", "lights off", "fans on", "everything off", "all off"]:
+        for t in ["turn off the tubelight", "lights off", "fans on", "everything off", "all off",
+                  "open chrome", "launch firefox"]:
             self.assertTrue(has_target(t, self.TARGETS), t)
 
     def test_partials_without_a_target_are_rejected(self):
         # the loop-forever bug: Vosk emits a partial that has on/off but no recognizable
         # target -> orchestrator says "Sorry I didn't catch that" -> infinite loop.
-        for t in ["off", "the off", "on", "fan on"]:
+        for t in ["off", "the off", "on", "fan on", "open"]:
             self.assertFalse(has_target(t, self.TARGETS), t)
 
 

@@ -7,6 +7,7 @@ import { config, assertEsp32Configured } from './config.js';
 import { openRegistry } from './db/registry.js';
 import { Esp32Switch } from './devices/esp32-switch.js';
 import { parseWithSource } from './intent/index.js';
+import { loadAllowlistSync, makeOpenApp } from './pc/apps.js';
 import { route } from './router.js';
 import { createTelemetry } from './telemetry.js';
 
@@ -193,16 +194,19 @@ export function main() {
   );
   esp32.startPolling();
 
+  const allowlist = loadAllowlistSync();
+  const openApp = makeOpenApp({ allowlist });
   const vocab = {
     deviceNames: registry.getSwitchNamesByChannel(),
     groupNames: registry.getGroupNames().filter((g) => g !== 'other'),
+    appNames: Object.keys(allowlist),
   };
   const knownTargets = new Set([...vocab.deviceNames, ...registry.getGroupNames()]);
 
   const telemetry = createTelemetry();
 
   const runIntent = async (intent, rawText, via) => {
-    const { ok, speak } = await route(intent, { board: esp32, registry });
+    const { ok, speak } = await route(intent, { board: esp32, registry, openApp });
     registry.logCommand({ raw_text: rawText, intent, ok: ok ? 1 : 0, detail: speak });
     telemetry.recordCommand({ text: rawText, intent, via, ok, speak });
     return { ok, speak, intent, via };

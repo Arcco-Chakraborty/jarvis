@@ -9,6 +9,7 @@ from grammar import to_spoken, build_grammar, normalize_transcript
 VOCAB = {
     "deviceNames": ["fan 1", "fan 2", "tubelight", "rgb light", "socket"],
     "groupNames": ["lights", "fans"],
+    "appNames": ["chrome", "firefox", "vs code"],
 }
 
 
@@ -33,6 +34,8 @@ class GrammarTest(unittest.TestCase):
             "turn off all fans except fan one",
             "keep only the tube light on", "keep only the lights on",
             "stop", "cancel", "never mind",
+            "open chrome", "launch chrome", "start chrome",
+            "open vs code", "launch firefox",
         ]:
             self.assertIn(p, phrases)
         self.assertEqual(mapping["fan one"], "fan 1")

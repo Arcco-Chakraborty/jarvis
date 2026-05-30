@@ -157,6 +157,41 @@ test('status before first poll is graceful', async () => {
   registry.close();
 });
 
+test('pc open_app dispatches to the injected openApp capability', async () => {
+  const calls = [];
+  const openApp = (args) => { calls.push(args); return { ok: true, speak: 'Opening chrome.' }; };
+  const registry = reg();
+  const res = await route(
+    { domain: 'pc', action: 'open_app', target: 'chrome' },
+    { board: fakeBoard(), registry, openApp },
+  );
+  assert.deepEqual(calls, [{ name: 'chrome' }]);
+  assert.deepEqual(res, { ok: true, speak: 'Opening chrome.' });
+  registry.close();
+});
+
+test('pc with no openApp configured reports it gracefully', async () => {
+  const registry = reg();
+  const res = await route(
+    { domain: 'pc', action: 'open_app', target: 'chrome' },
+    { board: fakeBoard(), registry },
+  );
+  assert.equal(res.ok, false);
+  assert.match(res.speak, /pc capability/i);
+  registry.close();
+});
+
+test('pc with an unknown action returns ok:false', async () => {
+  const registry = reg();
+  const openApp = () => ({ ok: true, speak: 'no' });
+  const res = await route(
+    { domain: 'pc', action: 'eject_floppy', target: 'a:' },
+    { board: fakeBoard(), registry, openApp },
+  );
+  assert.equal(res.ok, false);
+  registry.close();
+});
+
 test('unreachable board yields the error sentence', async () => {
   const registry = reg();
   const res = await route({ domain: 'switch', action: 'off', target: 'tubelight' }, { board: fakeBoard({ throwOnSet: true }), registry });

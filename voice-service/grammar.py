@@ -73,6 +73,14 @@ def build_grammar(vocab):
               "stop", "cancel", "never mind"):
         add(p)
 
+    # PC apps: "open <app>" / "launch <app>" / "start <app>" — phrases only;
+    # the orchestrator's allowlist decides whether to actually run it.
+    apps = (vocab or {}).get("appNames", []) or []
+    for app in apps:
+        add(f"open {app}")
+        add(f"launch {app}")
+        add(f"start {app}")
+
     return phrases, spoken_to_name
 
 
