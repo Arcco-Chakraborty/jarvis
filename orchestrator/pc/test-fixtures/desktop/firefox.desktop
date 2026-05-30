@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=Firefox
+Exec=firefox %u
+Type=Application
+Categories=Network;

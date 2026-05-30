@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=Should Not Show
+Exec=should-not-show
+Type=Application
+NoDisplay=true
