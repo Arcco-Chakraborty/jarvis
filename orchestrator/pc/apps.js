@@ -13,14 +13,6 @@ export function loadAliasesSync(path = join(import.meta.dirname, 'apps-aliases.j
   catch { return {}; }
 }
 
-// Deprecated: kept so server.js keeps importing this between Task 2 and Task 7,
-// when the composition root migrates to buildAppCatalog(). Returns an empty
-// catalog so the server boots; apps will say "I don't know how to open X"
-// until Task 7 lands. Task 7 deletes this export entirely.
-export function loadAllowlistSync() {
-  return {};
-}
-
 // catalog = discovered apps merged with aliases. Aliases pointing to a name
 // that wasn't discovered are silently dropped.
 export async function buildAppCatalog({

@@ -7,7 +7,8 @@ import { config, assertEsp32Configured } from './config.js';
 import { openRegistry } from './db/registry.js';
 import { Esp32Switch } from './devices/esp32-switch.js';
 import { parseWithSource } from './intent/index.js';
-import { loadAllowlistSync, makeOpenApp } from './pc/apps.js';
+import { buildAppCatalog, makeOpenApp } from './pc/apps.js';
+import { makeBrowser } from './pc/browser.js';
 import { makeMedia } from './pc/media.js';
 import { makeWindow } from './pc/window.js';
 import { loadRecipesSync, makeShell } from './pc/shell.js';
@@ -57,7 +58,7 @@ function weatherCodeLabel(code) {
 export function makePipeline({
   parse, vocab, route,
   esp32 = null, registry = null,
-  openApp = null, media = null, win = null, shell = null,
+  openApp = null, media = null, win = null, shell = null, browser = null,
   telemetry = null,
   now = Date.now, ttlMs = 60_000,
 }) {
@@ -93,7 +94,7 @@ export function makePipeline({
     if (pending) pending = null;
 
     if (!intent) return log(text, null, null, false, "Sorry, I didn't catch that.");
-    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win });
+    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win, browser });
     return log(text, intent, via, ok, speak);
   }
 
@@ -101,7 +102,7 @@ export function makePipeline({
 }
 
 export function buildApp({
-  esp32, onCommand, onSwitch, telemetry, vocab,
+  esp32, onCommand, onSwitch, onRescan, telemetry, vocab,
   weatherFetch = fetch,
   readNetDev = () => readFile('/proc/net/dev', 'utf8'),
   now = Date.now,
@@ -191,6 +192,16 @@ export function buildApp({
     res.json({ ok: true, smartswitch: esp32.snapshot(), online: esp32.online });
   });
 
+  app.post('/system/rescan', async (req, res) => {
+    if (!onRescan) return res.status(503).json({ ok: false, error: 'no rescanner' });
+    try {
+      const result = await onRescan();
+      res.json({ ok: true, ...result });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: e.message });
+    }
+  });
+
   // Free-text transcript -> NL pipeline.
   app.post('/command', async (req, res) => {
     const text = req.body?.text;
@@ -230,7 +241,7 @@ export function buildApp({
 }
 
 // Composition root: seed registry, wire the board, poll, build pipelines, listen.
-export function main() {
+export async function main() {
   assertEsp32Configured();
   const registry = openRegistry();
   const board = registry.getBoard();
@@ -246,16 +257,17 @@ export function main() {
   );
   esp32.startPolling();
 
-  const allowlist = loadAllowlistSync();
+  const catalogRef = await buildAppCatalog();   // mutable; shared by reference
   const recipes = loadRecipesSync();
-  const openApp = makeOpenApp({ allowlist });
+  const openApp = makeOpenApp({ allowlist: catalogRef });
+  const browser = makeBrowser();
   const media = makeMedia();
   const winCap = makeWindow();
   const shell = makeShell({ recipes });
   const vocab = {
     deviceNames: registry.getSwitchNamesByChannel(),
     groupNames: registry.getGroupNames().filter((g) => g !== 'other'),
-    appNames: Object.keys(allowlist),
+    appNames: Object.keys(catalogRef),
     shellRecipes: Object.keys(recipes),
   };
   const knownTargets = new Set([...vocab.deviceNames, ...registry.getGroupNames()]);
@@ -263,7 +275,7 @@ export function main() {
   const telemetry = createTelemetry();
   const pipeline = makePipeline({
     parse: parseWithSource, vocab, route, esp32, registry,
-    openApp, media, win: winCap, shell, telemetry,
+    openApp, media, win: winCap, shell, browser, telemetry,
   });
   const onCommand = pipeline.onCommand;
 
@@ -276,18 +288,26 @@ export function main() {
       return { ok: false, speak: "I don't know how to do that.", intent: null, via: 'ui' };
     }
     const rawText = `[ui] ${action}${target ? ' ' + target : ''}`;
-    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win: winCap });
+    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win: winCap, browser });
     registry.logCommand({ raw_text: rawText, intent, ok: ok ? 1 : 0, detail: speak });
     telemetry.recordCommand({ text: rawText, intent, via: 'ui', ok, speak });
     return { ok, speak, intent, via: 'ui' };
   };
 
-  buildApp({ esp32, onCommand, onSwitch, telemetry, vocab }).listen(config.port, () => {
+  const onRescan = async () => {
+    const fresh = await buildAppCatalog();
+    for (const k of Object.keys(catalogRef)) delete catalogRef[k];
+    Object.assign(catalogRef, fresh);
+    vocab.appNames = Object.keys(catalogRef);
+    return { appCount: vocab.appNames.length };
+  };
+
+  buildApp({ esp32, onCommand, onSwitch, onRescan, telemetry, vocab }).listen(config.port, () => {
     console.log(`JARVIS orchestrator listening on http://localhost:${config.port}`);
   });
 }
 
 // Run main() only when executed directly (node server.js), never on import (tests).
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main();
+  main().catch((e) => { console.error(e); process.exit(1); });
 }

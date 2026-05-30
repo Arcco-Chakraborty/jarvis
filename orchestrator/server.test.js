@@ -433,3 +433,26 @@ test('GET /vocab tolerates missing vocab', async () => {
     server.close();
   }
 });
+
+test('POST /system/rescan invokes the onRescan hook and returns the new app count', async () => {
+  let called = 0;
+  const onRescan = async () => { called++; return { appCount: 42 }; };
+  const server = buildApp({ esp32: stubEsp32({}), onRescan }).listen(0);
+  try {
+    await new Promise((r) => server.once('listening', r));
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const res = await fetch(`${base}/system/rescan`, { method: 'POST' });
+    assert.equal(res.status, 200);
+    const j = await res.json();
+    assert.equal(j.ok, true);
+    assert.equal(j.appCount, 42);
+    assert.equal(called, 1);
+  } finally { server.close(); }
+});
+
+test('POST /system/rescan returns 503 if no onRescan is configured', async () => {
+  await withServer(stubEsp32({}), async (base) => {
+    const res = await fetch(`${base}/system/rescan`, { method: 'POST' });
+    assert.equal(res.status, 503);
+  });
+});
