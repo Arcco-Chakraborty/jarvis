@@ -43,31 +43,25 @@ class HandleTextTest(unittest.TestCase):
 
 
 class RunConversationTest(unittest.TestCase):
-    def test_handles_commands_until_silence(self):
-        # None signals silence (no speech) -> end the conversation.
-        seq = iter(["turn off the tubelight", "lights on", None])
+    def test_exits_after_one_successful_command(self):
+        # One command per wake: after a successful dispatch, immediately
+        # re-arm the wake word — do NOT wait for follow-ups.
+        seq = iter(["lights on", "should-not-be-consumed"])
         handled = []
-        run_conversation(lambda: next(seq), handled.append, followup_seconds=5)
-        self.assertEqual(handled, ["turn off the tubelight", "lights on"])
-
-    def test_one_shot_when_followup_zero(self):
-        seq = iter(["a", "b"])
-        handled = []
-        run_conversation(lambda: next(seq), handled.append, followup_seconds=0)
-        self.assertEqual(handled, ["a"])
+        run_conversation(lambda: next(seq), lambda t: handled.append(t))
+        self.assertEqual(handled, ["lights on"])
 
     def test_returns_immediately_on_silence(self):
         handled = []
-        run_conversation(lambda: None, handled.append, followup_seconds=5)
+        run_conversation(lambda: None, handled.append)
         self.assertEqual(handled, [])
 
     def test_unrecognized_retries_then_handles(self):
-        # "" means heard-but-not-understood: say "didn't catch that" and try again,
-        # don't drop back to sleep.
-        seq = iter(["", "lights on", None])
+        # Heard-but-not-understood ("") -> retry. Success on the retry exits.
+        seq = iter(["", "lights on"])
         handled, misses = [], []
         run_conversation(
-            lambda: next(seq), handled.append, followup_seconds=5,
+            lambda: next(seq), lambda t: handled.append(t),
             unrecognized_fn=lambda: misses.append(1), max_unrecognized=3,
         )
         self.assertEqual(handled, ["lights on"])
@@ -77,48 +71,39 @@ class RunConversationTest(unittest.TestCase):
         # Continuous noise must not loop forever: give up after max_unrecognized misses.
         handled, misses = [], []
         run_conversation(
-            lambda: "", handled.append, followup_seconds=5,
-            unrecognized_fn=lambda: misses.append(1), max_unrecognized=2,
+            lambda: "", handled.append,
+            unrecognized_fn=lambda: misses.append(1), max_unrecognized=3,
         )
         self.assertEqual(handled, [])
-        self.assertEqual(len(misses), 2)
+        self.assertEqual(len(misses), 3)  # speaks "didn't catch that" 3 times, then sleeps
 
     def test_orchestrator_null_intent_counts_as_a_miss(self):
-        # Defense in depth: even if STT produces non-empty text and the orchestrator
-        # returns "Sorry I didn't catch that" (intent is None), the loop must NOT run
-        # forever. Bounded by max_unrecognized like STT-side misses.
+        # An orchestrator "Sorry I didn't catch that" (intent is None) also counts.
         class R:
             def __init__(self, intent):
                 self.intent = intent
-        bad = R(intent=None)
-        results = iter([bad, bad, bad])
-        seq = iter(["lights off", "lights off", "lights off", None])
+        results = iter([R(intent=None), R(intent=None), R(intent=None)])
+        seq = iter(["a", "b", "c"])
         handled = []
         def hf(t):
             handled.append(t)
             return next(results)
-        run_conversation(lambda: next(seq), hf, followup_seconds=5, max_unrecognized=2)
-        # Stops after 2 dispatches whose intent was None (not 3).
-        self.assertEqual(len(handled), 2)
+        run_conversation(lambda: next(seq), hf, max_unrecognized=3)
+        # Stops after 3 null-intent dispatches.
+        self.assertEqual(len(handled), 3)
 
-    def test_successful_intent_resets_miss_counter(self):
-        # A successful command (intent is not None) clears the miss streak.
-        class R:
-            def __init__(self, intent):
-                self.intent = intent
-        good = R(intent={"action": "off"})
-        none = R(intent=None)
-        # miss, success (resets), miss, miss, silence
-        results = iter([none, good, none, none])
-        seq = iter(["a", "b", "c", "d", None])
-        handled = []
-        def hf(t):
-            handled.append(t)
-            return next(results)
-        run_conversation(lambda: next(seq), hf, followup_seconds=5, max_unrecognized=2)
-        # With max=2, the success in between prevents the miss counter from ever hitting 2.
-        # All 4 turns processed, then silence ends it.
-        self.assertEqual(len(handled), 4)
+    def test_stop_command_exits_without_dispatching(self):
+        # The STOP sentinel from STT means user said "stop" / "cancel" /
+        # "never mind" -> end the conversation immediately, optionally speak
+        # an acknowledgment via cancel_fn. handle_fn must NOT be called.
+        from stt import STOP
+        handled, canceled = [], []
+        run_conversation(
+            lambda: STOP, lambda t: handled.append(t),
+            cancel_fn=lambda: canceled.append(1),
+        )
+        self.assertEqual(handled, [])
+        self.assertEqual(canceled, [1])
 
 
 if __name__ == "__main__":

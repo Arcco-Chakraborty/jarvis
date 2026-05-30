@@ -32,6 +32,7 @@ class GrammarTest(unittest.TestCase):
             "turn off everything except the tube light",
             "turn off all fans except fan one",
             "keep only the tube light on", "keep only the lights on",
+            "stop", "cancel", "never mind",
         ]:
             self.assertIn(p, phrases)
         self.assertEqual(mapping["fan one"], "fan 1")

@@ -4,7 +4,7 @@ import sys
 from config import load_config
 from orchestrator import OrchestratorClient
 from reporter import build_reporter
-from stt import build_stt
+from stt import STOP, build_stt
 from tts import build_tts
 from wakeword import build_wake_listener
 
@@ -18,25 +18,29 @@ def handle_text(text, client, speaker):
     return result
 
 
-def run_conversation(listen_fn, handle_fn, followup_seconds, reporter=None,
-                     unrecognized_fn=None, max_unrecognized=3):
-    """Take commands turn-by-turn. listen_fn returns:
-      None -> silence (no speech): end the conversation, re-arm the wake word.
-      ""   -> heard speech but not a command: say so and retry, up to
-              max_unrecognized consecutive misses (so noise can't loop forever).
-      str  -> a command: dispatch it via handle_fn.
-    handle_fn may return a result object with an `intent` attribute. A result
-    whose `intent is None` (the orchestrator answered "Sorry I didn't catch
-    that") also counts as a miss — otherwise junk that slips past STT could
-    spin the loop forever. Successful commands reset the miss counter.
-    followup_seconds <= 0 -> one-shot (handle one command, then return)."""
+def run_conversation(listen_fn, handle_fn, reporter=None,
+                     unrecognized_fn=None, cancel_fn=None, max_unrecognized=3):
+    """One command per wake. listen_fn returns:
+      None     -> silence (no speech): return, re-arm the wake word.
+      STOP     -> user said 'stop' / 'cancel' / 'never mind': call cancel_fn
+                  (typically a short "Okay." acknowledgment) and return.
+      ""       -> heard speech but not a command: speak 'didn't catch that'
+                  and retry, up to max_unrecognized consecutive misses.
+      str      -> a command: dispatch via handle_fn, then return.
+    A handle_fn result whose `intent is None` (the orchestrator answered
+    "Sorry I didn't catch that") also counts as a miss; without that the
+    loop could spin forever on a partial that slipped past STT."""
     misses = 0
-    SENTINEL = object()
+    UNSET = object()
     while True:
         if reporter is not None:
             reporter.emit("recording")
         text = listen_fn()
         if text is None:
+            return
+        if text is STOP:
+            if cancel_fn is not None:
+                cancel_fn()
             return
         if not text:
             misses += 1
@@ -51,16 +55,14 @@ def run_conversation(listen_fn, handle_fn, followup_seconds, reporter=None,
             reporter.emit("transcript", text=text)
         result = handle_fn(text)
         # The orchestrator already spoke "Sorry I didn't catch that"; don't double-speak.
-        if result is not None and getattr(result, "intent", SENTINEL) is None:
+        if result is not None and getattr(result, "intent", UNSET) is None:
             misses += 1
             if reporter is not None:
                 reporter.emit("unrecognized")
             if misses >= max_unrecognized:
                 return
             continue
-        misses = 0
-        if followup_seconds <= 0:
-            return
+        return  # successful command -> re-arm the wake word
 
 
 def run_loop(config, client=None, stt=None, wake_listener=None, speaker=None, reporter=None):
@@ -84,9 +86,9 @@ def run_loop(config, client=None, stt=None, wake_listener=None, speaker=None, re
             run_conversation(
                 listen_fn=lambda: stt.listen(config.followup_seconds, config.max_utterance_seconds),
                 handle_fn=lambda t: handle_text(t, client, speaker),
-                followup_seconds=config.followup_seconds,
                 reporter=reporter,
                 unrecognized_fn=lambda: speaker.speak("Sorry, I didn't catch that."),
+                cancel_fn=lambda: speaker.speak("Okay."),
                 max_unrecognized=config.max_unrecognized,
             )
         else:

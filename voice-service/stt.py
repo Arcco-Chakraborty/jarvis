@@ -11,6 +11,11 @@ from urllib.request import urlopen
 _ON_OFF = re.compile(r"\b(on|off)\b")
 _DEBUG = bool(os.environ.get("VOICE_DEBUG"))
 
+# Sentinel returned by listen() when the user said "stop" / "cancel" / "never mind".
+# Distinct object so the conversation loop tells it apart from a string command.
+STOP = object()
+STOP_PHRASES = {"stop", "cancel", "never mind"}
+
 
 def _debug(msg):
     if _DEBUG:
@@ -159,6 +164,9 @@ class VoskSTT:
             _debug(f"REJECT heard={text!r} conf={conf:.2f} (min {self.min_conf})")
             return ""  # heard ambient noise / low-confidence -> not understood, retry
         norm = normalize_transcript(text, self.spoken_to_name)
+        if norm in STOP_PHRASES:
+            _debug(f"STOP heard={norm!r} conf={conf:.2f}")
+            return STOP
         if not looks_like_command(norm) or not has_target(norm, self._targets):
             _debug(f"REJECT no-command/no-target heard={text!r} conf={conf:.2f}")
             return ""  # partial Vosk output ("the", "off", "the off") -> not a command, retry
