@@ -191,34 +191,49 @@ test('voice routes tolerate missing telemetry', async () => {
   }
 });
 
-test('POST /state/refresh forces a live board fetch and returns fresh snapshot', async () => {
-  let refreshed = 0;
-  const stub = {
-    snapshot: () => ({ tubelight: true, 'fan 1': false }),
-    online: true,
-    refresh: async () => { refreshed++; },
-  };
-  await withServer(stub, async (base) => {
-    const res = await fetch(`${base}/state/refresh`, { method: 'POST' });
-    assert.equal(res.status, 200);
-    const j = await res.json();
+// Two synthetic /proc/net/dev snapshots 1 second apart. Single iface 'eth0'.
+function netDevSample(rx, tx) {
+  return [
+    'Inter-|   Receive                                                |  Transmit',
+    ' face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed',
+    `    lo: 1000 10 0 0 0 0 0 0 1000 10 0 0 0 0 0 0`,
+    `  eth0: ${rx} 100 0 0 0 0 0 0 ${tx} 100 0 0 0 0 0 0`,
+  ].join('\n');
+}
+
+test('GET /network returns 0 rates on first call (no prev) and parses /proc/net/dev', async () => {
+  const readNetDev = async () => netDevSample(1000, 500);
+  const server = buildApp({ esp32: stubEsp32({}), readNetDev }).listen(0);
+  try {
+    await new Promise((r) => server.once('listening', r));
+    const j = await (await fetch(`http://127.0.0.1:${server.address().port}/network`)).json();
     assert.equal(j.ok, true);
-    assert.equal(j.online, true);
-    assert.deepEqual(j.smartswitch, { tubelight: true, 'fan 1': false });
-    assert.equal(refreshed, 1);
-  });
+    assert.equal(j.rx, 0);
+    assert.equal(j.tx, 0);
+    assert.equal(j.rxTotal, 1000);  // eth0 only (lo filtered)
+    assert.equal(j.txTotal, 500);
+  } finally {
+    server.close();
+  }
 });
 
-test('POST /state/refresh surfaces board errors as 503', async () => {
-  const stub = {
-    snapshot: () => ({}),
-    online: false,
-    refresh: async () => { throw new Error('board down'); },
-  };
-  await withServer(stub, async (base) => {
-    const res = await fetch(`${base}/state/refresh`, { method: 'POST' });
-    assert.equal(res.status, 503);
-  });
+test('GET /network computes byte-rates between successive polls', async () => {
+  let total = { rx: 1000, tx: 500 };
+  const readNetDev = async () => netDevSample(total.rx, total.tx);
+  let clock = 1000;
+  const server = buildApp({ esp32: stubEsp32({}), readNetDev, now: () => clock }).listen(0);
+  try {
+    await new Promise((r) => server.once('listening', r));
+    const base = `http://127.0.0.1:${server.address().port}`;
+    await (await fetch(`${base}/network`)).json();   // seed prev at t=1000
+    // 2s later, +20000 rx, +5000 tx -> 10000 B/s rx, 2500 B/s tx
+    clock = 3000; total = { rx: 21000, tx: 5500 };
+    const j = await (await fetch(`${base}/network`)).json();
+    assert.equal(j.rx, 10000);
+    assert.equal(j.tx, 2500);
+  } finally {
+    server.close();
+  }
 });
 
 test('GET /system returns OS vitals as numbers', async () => {

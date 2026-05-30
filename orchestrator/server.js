@@ -14,6 +14,25 @@ const WEATHER_LAT = process.env.WEATHER_LAT || '28.36';   // Pilani default
 const WEATHER_LON = process.env.WEATHER_LON || '75.59';
 const WEATHER_TTL_MS = 5 * 60 * 1000;
 
+// /proc/net/dev parser — sums all non-loopback interfaces.
+// File layout: 2 header lines, then "iface: rx_bytes ... (8 fields) tx_bytes ..."
+export function parseNetDev(raw) {
+  const lines = String(raw || '').split('\n').slice(2);
+  let rx = 0, tx = 0;
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) continue;
+    const m = t.match(/^([^\s:]+):\s+(.*)$/);
+    if (!m) continue;
+    if (m[1] === 'lo') continue;
+    const cols = m[2].split(/\s+/);
+    if (cols.length < 16) continue;
+    rx += parseInt(cols[0], 10) || 0;
+    tx += parseInt(cols[8], 10) || 0;
+  }
+  return { rx, tx };
+}
+
 function weatherCodeLabel(code) {
   if (code === 0) return 'CLEAR';
   if (code <= 3) return 'PARTLY CLOUDY';
@@ -28,7 +47,12 @@ function weatherCodeLabel(code) {
 
 // Pure factory — no network, no DB. Dependencies injected for testability.
 // onCommand(text) and onSwitch({target, action}) each resolve to { ok, speak, intent }.
-export function buildApp({ esp32, onCommand, onSwitch, telemetry, vocab, weatherFetch = fetch, now = Date.now }) {
+export function buildApp({
+  esp32, onCommand, onSwitch, telemetry, vocab,
+  weatherFetch = fetch,
+  readNetDev = () => readFile('/proc/net/dev', 'utf8'),
+  now = Date.now,
+}) {
   const app = express();
   app.use(express.json());
   app.use(express.static(join(import.meta.dirname, 'public')));
@@ -56,6 +80,28 @@ export function buildApp({ esp32, onCommand, onSwitch, telemetry, vocab, weather
         uptime: Math.floor(os.uptime()),
         therm, host: os.hostname(), platform: os.platform(),
       });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: e.message });
+    }
+  });
+
+  // Network rate from /proc/net/dev — remembers prev totals to compute B/s between polls.
+  let netPrev = null;
+  app.get('/network', async (req, res) => {
+    try {
+      const raw = await readNetDev();
+      const { rx, tx } = parseNetDev(raw);
+      const t = now();
+      let rxRate = 0, txRate = 0;
+      if (netPrev) {
+        const dt = (t - netPrev.t) / 1000;
+        if (dt > 0) {
+          rxRate = Math.max(0, (rx - netPrev.rx) / dt);
+          txRate = Math.max(0, (tx - netPrev.tx) / dt);
+        }
+      }
+      netPrev = { t, rx, tx };
+      res.json({ ok: true, rx: rxRate, tx: txRate, rxTotal: rx, txTotal: tx });
     } catch (e) {
       res.status(500).json({ ok: false, error: e.message });
     }
@@ -90,16 +136,6 @@ export function buildApp({ esp32, onCommand, onSwitch, telemetry, vocab, weather
 
   app.get('/state', (req, res) => {
     res.json({ ok: true, smartswitch: esp32.snapshot(), online: esp32.online });
-  });
-
-  // Force a fresh poll of the board (skips the cache; dashboard "refresh" button hits this).
-  app.post('/state/refresh', async (req, res) => {
-    try {
-      await esp32.refresh();
-      res.json({ ok: true, smartswitch: esp32.snapshot(), online: esp32.online });
-    } catch (e) {
-      res.status(503).json({ ok: false, error: e.message });
-    }
   });
 
   // Free-text transcript -> NL pipeline.

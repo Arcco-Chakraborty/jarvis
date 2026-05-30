@@ -399,13 +399,21 @@
     <aside class="rail right">
       <div class="widget">
         <span class="brk tl"></span><span class="brk tr"></span><span class="brk bl"></span><span class="brk br"></span>
-        <div class="wtitle">Chrono <span class="tag" id="tz">UTC±00:00</span></div>
-        <div class="bigclock" id="bigclock">00:00:00</div>
-        <div class="bigdate" id="bigdate">— — —</div>
-        <div class="meta">
-          <div><span>DAY</span> <b id="dayno">000</b></div>
-          <div><span>WK</span> <b id="weekno">00</b></div>
+        <div class="wtitle">Network Telemetry <span class="tag" id="net-iface">eth0 • aes-256</span></div>
+        <div class="spark">
+          <svg viewBox="0 0 100 56" preserveAspectRatio="none">
+            <line class="gridY" x1="0" y1="14" x2="100" y2="14"></line>
+            <line class="gridY" x1="0" y1="28" x2="100" y2="28"></line>
+            <line class="gridY" x1="0" y1="42" x2="100" y2="42"></line>
+            <path class="upL" id="net-up" d=""></path>
+            <path class="dnL" id="net-dn" d=""></path>
+          </svg>
         </div>
+        <div class="legend">
+          <span><i class="swatch up"></i> <b id="net-up-v">0.0 KB/s</b> up</span>
+          <span><i class="swatch dn"></i> <b id="net-dn-v">0.0 KB/s</b> dn</span>
+        </div>
+        <div class="keys"><b>RX</b> <span id="net-rx-tot">—</span> &nbsp; <b>TX</b> <span id="net-tx-tot">—</span></div>
       </div>
 
       <div class="widget">
@@ -543,17 +551,12 @@ function renderDevices(smartswitch, online) {
   $("#dev-online").textContent = onCount + "/" + entries.length;
 }
 
-/* Force the orchestrator to re-poll the board (skips its cache) and re-render. */
+/* Re-pull /state from the orchestrator and re-render the local model. */
 async function refreshDevices() {
   const btn = document.getElementById("w-refresh");
   btn.classList.add("spin");
-  try {
-    const j = await jpost("/state/refresh", {});
-    if (j && j.smartswitch) renderDevices(j.smartswitch, !!j.online);
-  } catch (_) {
-  } finally {
-    setTimeout(() => btn.classList.remove("spin"), 720);
-  }
+  try { await pollState(); }
+  finally { setTimeout(() => btn.classList.remove("spin"), 720); }
 }
 window.refreshDevices = refreshDevices;
 async function toggleDeviceClick(el) {
@@ -728,27 +731,59 @@ function applyState(s) {
   $("#state-sub").textContent = STATE_LABELS[s][1];
 }
 
-/* ---------- CLOCK ---------- */
+/* ---------- CLOCK (only the topbar; Chrono widget was replaced by Network) ---------- */
 function tickClock() {
   const d = new Date();
   const pad = (n) => String(n).padStart(2, "0");
-  const t = pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
-  $("#clock").textContent = t;
-  $("#bigclock").textContent = t;
+  $("#clock").textContent = pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
   const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
   const days = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
-  const dateLbl = days[d.getDay()] + " • " + pad(d.getDate()) + " " + months[d.getMonth()] + " " + d.getFullYear();
-  $("#date").textContent = dateLbl;
-  $("#bigdate").textContent = dateLbl;
-  const start = new Date(d.getFullYear(), 0, 1);
-  const dayno = Math.ceil((d - start) / 86400000);
-  $("#dayno").textContent = String(dayno).padStart(3, "0");
-  $("#weekno").textContent = pad(Math.ceil(dayno / 7));
-  const tz = -d.getTimezoneOffset();
-  const sign = tz >= 0 ? "+" : "−";
-  $("#tz").textContent = "UTC" + sign + pad(Math.floor(Math.abs(tz) / 60)) + ":" + pad(Math.abs(tz) % 60);
+  $("#date").textContent = days[d.getDay()] + " • " + pad(d.getDate()) + " " + months[d.getMonth()] + " " + d.getFullYear();
 }
 tickClock(); setInterval(tickClock, 1000);
+
+/* ---------- NETWORK ---------- */
+const netHist = { up: [], dn: [], MAX: 60 };
+function fmtRate(bps) {
+  if (bps >= 1024 * 1024) return (bps / 1024 / 1024).toFixed(1) + " MB/s";
+  if (bps >= 1024) return (bps / 1024).toFixed(1) + " KB/s";
+  return Math.round(bps) + " B/s";
+}
+function fmtBytes(b) {
+  if (b >= 1e9) return (b / 1e9).toFixed(2) + " GB";
+  if (b >= 1e6) return (b / 1e6).toFixed(1) + " MB";
+  if (b >= 1e3) return (b / 1e3).toFixed(1) + " KB";
+  return Math.round(b) + " B";
+}
+function drawNetSpark() {
+  const W = 100, H = 56;
+  const max = Math.max(1, ...netHist.up, ...netHist.dn);
+  const path = (arr) => {
+    if (!arr.length) return "";
+    let d = "";
+    for (let i = 0; i < arr.length; i++) {
+      const x = arr.length > 1 ? (i / (arr.length - 1)) * W : 0;
+      const y = H - (arr[i] / max) * (H - 4) - 2;
+      d += (i === 0 ? "M" : "L") + x.toFixed(2) + " " + y.toFixed(2) + " ";
+    }
+    return d;
+  };
+  $("#net-up").setAttribute("d", path(netHist.up));
+  $("#net-dn").setAttribute("d", path(netHist.dn));
+}
+async function pollNetwork() {
+  try {
+    const j = await jget("/network");
+    netHist.up.push(j.tx || 0); netHist.dn.push(j.rx || 0);
+    while (netHist.up.length > netHist.MAX) netHist.up.shift();
+    while (netHist.dn.length > netHist.MAX) netHist.dn.shift();
+    drawNetSpark();
+    $("#net-up-v").textContent = fmtRate(j.tx || 0);
+    $("#net-dn-v").textContent = fmtRate(j.rx || 0);
+    $("#net-rx-tot").textContent = fmtBytes(j.rxTotal || 0);
+    $("#net-tx-tot").textContent = fmtBytes(j.txTotal || 0);
+  } catch (_) {}
+}
 
 /* ---------- PARALLAX + CURSOR ---------- */
 const mouse = { x: 0.5, y: 0.5 };
@@ -1002,6 +1037,7 @@ requestAnimationFrame(frame);
 pollState();   setInterval(pollState,   1500);
 pollVoice();   setInterval(pollVoice,    500);
 pollSystem();  setInterval(pollSystem,  2000);
+pollNetwork(); setInterval(pollNetwork, 2000);
 pollLog();     setInterval(pollLog,     1500);
 pollWeather(); setInterval(pollWeather, 5 * 60 * 1000);
 </script>

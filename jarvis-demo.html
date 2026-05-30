@@ -921,17 +921,23 @@
     </div>
 
     <aside class="rail right">
-      <!-- time / date -->
+      <!-- network telemetry (simulated for the standalone demo) -->
       <div class="widget">
         <span class="brk tl"></span><span class="brk tr"></span><span class="brk bl"></span><span class="brk br"></span>
-        <div class="wtitle">Chrono <span class="tag" id="tz">UTC±00:00</span></div>
-        <div class="bigclock" id="bigclock">00:00:00</div>
-        <div class="bigdate" id="bigdate">— — —</div>
-        <div class="meta">
-          <div><span>SOL</span> <b id="suntime">06:00 / 18:00</b></div>
-          <div><span>MOON</span> <b id="moon">73%</b></div>
-          <div><span>DAY</span> <b id="dayno">000</b></div>
-          <div><span>WK</span> <b id="weekno">00</b></div>
+        <div class="wtitle">Network Telemetry <span class="tag">eth0 • aes-256</span></div>
+        <div class="spark">
+          <svg viewBox="0 0 100 56" preserveAspectRatio="none">
+            <line class="gridY" x1="0" y1="14" x2="100" y2="14"></line>
+            <line class="gridY" x1="0" y1="28" x2="100" y2="28"></line>
+            <line class="gridY" x1="0" y1="42" x2="100" y2="42"></line>
+            <path class="upL" id="net-up" d=""></path>
+            <path class="dnL" id="net-dn" d=""></path>
+          </svg>
+        </div>
+        <div class="legend">
+          <span><i class="swatch up"></i> <b id="net-up-v">0.0 KB/s</b> up</span>
+          <span><i class="swatch dn"></i> <b id="net-dn-v">0.0 KB/s</b> dn</span>
+          <span><b id="net-ping">— ms</b> ping</span>
         </div>
       </div>
 
@@ -1303,21 +1309,10 @@ function renderVoxBars(lvl, now) {
 function tickClock() {
   const d = new Date();
   const pad = (n) => String(n).padStart(2, "0");
-  const t = pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
-  $("#clock").textContent = t;
-  $("#bigclock").textContent = t;
+  $("#clock").textContent = pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
   const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-  const days   = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
-  const dateLbl = days[d.getDay()] + " • " + pad(d.getDate()) + " " + months[d.getMonth()] + " " + d.getFullYear();
-  $("#date").textContent = dateLbl;
-  $("#bigdate").textContent = dateLbl;
-  const start = new Date(d.getFullYear(), 0, 1);
-  const dayno = Math.ceil(((d - start) / 86400000));
-  $("#dayno").textContent = String(dayno).padStart(3, "0");
-  $("#weekno").textContent = pad(Math.ceil(dayno / 7));
-  const tz = -d.getTimezoneOffset();
-  const sign = tz >= 0 ? "+" : "−";
-  $("#tz").textContent = "UTC" + sign + pad(Math.floor(Math.abs(tz) / 60)) + ":" + pad(Math.abs(tz) % 60);
+  const days = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
+  $("#date").textContent = days[d.getDay()] + " • " + pad(d.getDate()) + " " + months[d.getMonth()] + " " + d.getFullYear();
 }
 tickClock(); setInterval(tickClock, 1000);
 
