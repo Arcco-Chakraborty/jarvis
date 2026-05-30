@@ -191,6 +191,36 @@ test('voice routes tolerate missing telemetry', async () => {
   }
 });
 
+test('POST /state/refresh forces a live board fetch and returns fresh snapshot', async () => {
+  let refreshed = 0;
+  const stub = {
+    snapshot: () => ({ tubelight: true, 'fan 1': false }),
+    online: true,
+    refresh: async () => { refreshed++; },
+  };
+  await withServer(stub, async (base) => {
+    const res = await fetch(`${base}/state/refresh`, { method: 'POST' });
+    assert.equal(res.status, 200);
+    const j = await res.json();
+    assert.equal(j.ok, true);
+    assert.equal(j.online, true);
+    assert.deepEqual(j.smartswitch, { tubelight: true, 'fan 1': false });
+    assert.equal(refreshed, 1);
+  });
+});
+
+test('POST /state/refresh surfaces board errors as 503', async () => {
+  const stub = {
+    snapshot: () => ({}),
+    online: false,
+    refresh: async () => { throw new Error('board down'); },
+  };
+  await withServer(stub, async (base) => {
+    const res = await fetch(`${base}/state/refresh`, { method: 'POST' });
+    assert.equal(res.status, 503);
+  });
+});
+
 test('GET /system returns OS vitals as numbers', async () => {
   await withServer(stubEsp32({}), async (base) => {
     const res = await fetch(`${base}/system`);

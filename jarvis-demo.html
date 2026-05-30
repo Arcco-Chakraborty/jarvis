@@ -606,6 +606,25 @@
     100% { box-shadow: 0 0 0 18px rgba(79,230,255,0), inset 0 0 14px rgba(79,230,255,0.18); }
   }
   .device.pulsed { animation: devPulse 0.7s ease-out; }
+
+  /* placeholder / empty slot tiles — room for future devices */
+  .device.empty {
+    border: 1px dashed rgba(79,230,255,0.18);
+    background: linear-gradient(160deg, rgba(8,22,32,0.35), rgba(4,12,18,0.2));
+    cursor: default; opacity: 0.5;
+    box-shadow: none;
+  }
+  .device.empty:hover { transform: none; border-color: rgba(79,230,255,0.32); box-shadow: none; }
+  .device.empty .ico { color: rgba(79,230,255,0.5); }
+  .device.empty .ico::after {
+    content: "+"; font-family: var(--display); font-weight: 700; font-size: 1.4rem;
+    color: rgba(79,230,255,0.5); line-height: 1;
+  }
+  .device.empty .nm, .device.empty .st { display: none; }
+  .widget.expanded .device.empty .nm { display: block; color: var(--muted); }
+  .widget.expanded .device.empty .nm::before { content: "Slot "; }
+  .widget.expanded .device.empty .st { display: block; color: var(--muted); }
+  .widget.expanded .device.empty .st::before { content: "FREE"; }
   .state-card {
     position: relative;
     text-align: center;
@@ -883,6 +902,10 @@
             <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 3"><circle cx="12" cy="12" r="7"/></svg></div>
             <div class="nm">Spare</div><div class="st">OFFLINE</div>
           </div>
+          <div class="device empty"><div class="ico"></div><div class="nm">9</div><div class="st"></div></div>
+          <div class="device empty"><div class="ico"></div><div class="nm">10</div><div class="st"></div></div>
+          <div class="device empty"><div class="ico"></div><div class="nm">11</div><div class="st"></div></div>
+          <div class="device empty"><div class="ico"></div><div class="nm">12</div><div class="st"></div></div>
         </div>
       </div>
     </aside>
@@ -1065,13 +1088,24 @@ function toggleDev(el) {
 }
 window.toggleDev = toggleDev;
 
+// "Portal" the widget to <body> on expand. The rails use CSS transform for
+// parallax, which makes them the containing block for position:fixed children
+// — that's why the modal was clipped to the rail (and looked blank).
+const _homes = new WeakMap();
 function toggleDevExpand() {
   const w = document.getElementById("w-devices");
-  const open = w.classList.toggle("expanded");
-  document.body.classList.toggle("modal-open", open);
+  if (w.classList.contains("expanded")) return closeAnyModal();
+  _homes.set(w, { parent: w.parentNode, next: w.nextSibling });
+  document.body.appendChild(w);
+  w.classList.add("expanded");
+  document.body.classList.add("modal-open");
 }
 function closeAnyModal() {
-  document.querySelectorAll(".widget.expanded").forEach((w) => w.classList.remove("expanded"));
+  document.querySelectorAll(".widget.expanded").forEach((w) => {
+    w.classList.remove("expanded");
+    const home = _homes.get(w);
+    if (home && home.parent) home.parent.insertBefore(w, home.next || null);
+  });
   document.body.classList.remove("modal-open");
 }
 document.addEventListener("keydown", (e) => {

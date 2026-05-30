@@ -217,6 +217,35 @@
   @keyframes devPulse { 0%{box-shadow:0 0 0 0 rgba(79,230,255,0.55), inset 0 0 14px rgba(79,230,255,0.18)} 100%{box-shadow:0 0 0 18px rgba(79,230,255,0), inset 0 0 14px rgba(79,230,255,0.18)} }
   .device.pulsed { animation: devPulse 0.7s ease-out; }
 
+  /* placeholder / empty slot tiles — room for future devices */
+  .device.empty {
+    border: 1px dashed rgba(79,230,255,0.18);
+    background: linear-gradient(160deg, rgba(8,22,32,0.35), rgba(4,12,18,0.2));
+    cursor: default; opacity: 0.5; box-shadow: none;
+  }
+  .device.empty:hover { transform: none; border-color: rgba(79,230,255,0.32); box-shadow: none; }
+  .device.empty .ico { color: rgba(79,230,255,0.5); }
+  .device.empty .ico::after { content: "+"; font-family: var(--display); font-weight: 700; font-size: 1.4rem; color: rgba(79,230,255,0.5); line-height: 1; }
+  .device.empty .nm, .device.empty .st { display: none; }
+  .widget.expanded .device.empty .nm { display: block; color: var(--muted); }
+  .widget.expanded .device.empty .nm::before { content: "Slot "; }
+  .widget.expanded .device.empty .st { display: block; color: var(--muted); }
+  .widget.expanded .device.empty .st::before { content: "FREE"; }
+
+  /* small refresh button next to expand */
+  .wrefresh {
+    position: absolute; top: 11px; right: 42px; z-index: 2;
+    background: rgba(79,230,255,0.06); border: 1px solid var(--panel-edge); color: var(--cyan);
+    width: 22px; height: 22px; border-radius: 4px;
+    display: grid; place-items: center;
+    cursor: pointer; font-family: var(--mono); font-size: 0.78rem; line-height: 1;
+    transition: 0.2s; padding: 0; pointer-events: auto;
+  }
+  .wrefresh:hover { background: rgba(79,230,255,0.2); box-shadow: 0 0 10px rgba(79,230,255,0.35); color: #eafdff; }
+  .wrefresh.spin .ic { animation: refresh-spin 0.7s linear; }
+  @keyframes refresh-spin { to { transform: rotate(360deg); } }
+  .widget.expanded .wrefresh { top: 18px; right: 56px; width: 28px; height: 28px; font-size: 1rem; }
+
   /* modal backdrop */
   .modal-backdrop { position: fixed; inset:0; z-index: 150; background: radial-gradient(circle at 50% 50%, rgba(2,9,15,0.55), rgba(2,9,15,0.92)); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); opacity: 0; pointer-events: none; transition: opacity 0.35s ease; }
   body.modal-open .modal-backdrop { opacity: 1; pointer-events: auto; }
@@ -351,6 +380,7 @@
 
       <div class="widget" id="w-devices">
         <span class="brk tl"></span><span class="brk tr"></span><span class="brk bl"></span><span class="brk br"></span>
+        <button class="wrefresh" id="w-refresh" onclick="refreshDevices()" aria-label="refresh from board"><span class="ic">↻</span></button>
         <button class="wexpand" onclick="toggleDevExpand()" aria-label="expand devices"><span class="ic">⌄</span></button>
         <div class="wtitle">Devices <span class="tag">mesh • <span id="dev-count">0</span> nodes</span></div>
         <div class="devbody" id="devbody"></div>
@@ -473,17 +503,21 @@ let lastState = {};
 
 function setDot(id, klass) { const el = document.getElementById(id); if (el) el.className = "dot " + klass; }
 
-/* device tiles built dynamically from /state */
+/* device tiles built dynamically from /state. Pads with empty slots so the
+   grid keeps a fixed visual footprint and shows room for future devices. */
+const EMPTY_PAD = 4;   // number of placeholder tiles to keep visible
 function renderDevices(smartswitch, online) {
   const host = $("#devbody");
   const entries = Object.entries(smartswitch || {});
   $("#dev-count").textContent = entries.length;
   let onCount = 0;
-  if (host.children.length !== entries.length) host.innerHTML = "";
+  // structural reset only when device count changes
+  const realChildren = [...host.children].filter((c) => !c.classList.contains("empty"));
+  if (realChildren.length !== entries.length) host.innerHTML = "";
   entries.forEach(([name, on], i) => {
     if (on) onCount++;
     let el = host.children[i];
-    if (!el) {
+    if (!el || el.classList.contains("empty")) {
       el = document.createElement("div");
       el.className = "device";
       el.dataset.name = name;
@@ -498,8 +532,30 @@ function renderDevices(smartswitch, online) {
     const st = el.querySelector(".st");
     if (st) st.textContent = isUnreach ? "UNREACH" : (on ? "ENERGIZED" : "OFFLINE");
   });
+  // top up with placeholder slots
+  while (host.children.length < entries.length + EMPTY_PAD) {
+    const ph = document.createElement("div");
+    ph.className = "device empty";
+    ph.innerHTML = '<div class="ico"></div><div class="nm">' + (host.children.length + 1) + '</div><div class="st"></div>';
+    host.appendChild(ph);
+  }
+  while (host.children.length > entries.length + EMPTY_PAD) host.removeChild(host.lastChild);
   $("#dev-online").textContent = onCount + "/" + entries.length;
 }
+
+/* Force the orchestrator to re-poll the board (skips its cache) and re-render. */
+async function refreshDevices() {
+  const btn = document.getElementById("w-refresh");
+  btn.classList.add("spin");
+  try {
+    const j = await jpost("/state/refresh", {});
+    if (j && j.smartswitch) renderDevices(j.smartswitch, !!j.online);
+  } catch (_) {
+  } finally {
+    setTimeout(() => btn.classList.remove("spin"), 720);
+  }
+}
+window.refreshDevices = refreshDevices;
 async function toggleDeviceClick(el) {
   if (el.classList.contains("unreach")) return;
   const name = el.dataset.name;
@@ -619,14 +675,23 @@ $("#cmd").addEventListener("keydown", async (e) => {
   }
 });
 
-/* modal expand */
+/* modal expand — portal to <body> because the rail uses CSS transform
+   (parallax), which would otherwise contain the position:fixed widget. */
+const _homes = new WeakMap();
 function toggleDevExpand() {
   const w = document.getElementById("w-devices");
-  const open = w.classList.toggle("expanded");
-  document.body.classList.toggle("modal-open", open);
+  if (w.classList.contains("expanded")) return closeAnyModal();
+  _homes.set(w, { parent: w.parentNode, next: w.nextSibling });
+  document.body.appendChild(w);
+  w.classList.add("expanded");
+  document.body.classList.add("modal-open");
 }
 function closeAnyModal() {
-  document.querySelectorAll(".widget.expanded").forEach((w) => w.classList.remove("expanded"));
+  document.querySelectorAll(".widget.expanded").forEach((w) => {
+    w.classList.remove("expanded");
+    const home = _homes.get(w);
+    if (home && home.parent) home.parent.insertBefore(w, home.next || null);
+  });
   document.body.classList.remove("modal-open");
 }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.body.classList.contains("modal-open")) closeAnyModal(); });

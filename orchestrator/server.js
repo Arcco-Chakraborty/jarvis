@@ -92,6 +92,16 @@ export function buildApp({ esp32, onCommand, onSwitch, telemetry, vocab, weather
     res.json({ ok: true, smartswitch: esp32.snapshot(), online: esp32.online });
   });
 
+  // Force a fresh poll of the board (skips the cache; dashboard "refresh" button hits this).
+  app.post('/state/refresh', async (req, res) => {
+    try {
+      await esp32.refresh();
+      res.json({ ok: true, smartswitch: esp32.snapshot(), online: esp32.online });
+    } catch (e) {
+      res.status(503).json({ ok: false, error: e.message });
+    }
+  });
+
   // Free-text transcript -> NL pipeline.
   app.post('/command', async (req, res) => {
     const text = req.body?.text;
