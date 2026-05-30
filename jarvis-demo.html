@@ -174,14 +174,13 @@
     pointer-events: none;
     display: grid;
     grid-template-columns: minmax(280px, 340px) 1fr minmax(280px, 340px);
-    grid-template-rows: auto 1fr auto auto;
+    grid-template-rows: auto 1fr auto;
     grid-template-areas:
       "head head head"
       "left center right"
-      "dock dock dock"
       "foot foot foot";
     padding: 18px clamp(16px, 2.6vw, 32px);
-    gap: 14px;
+    gap: 18px;
   }
   .ui > * { pointer-events: auto; }
 
@@ -466,81 +465,93 @@
     pointer-events: none;
   }
 
-  /* device dock — a dedicated row above the command bar (kept clear of the orb) */
-  .devices {
-    grid-area: dock;
-    display: flex; flex-wrap: wrap; gap: 10px;
-    justify-content: center; align-items: stretch;
+  /* expand toggle button (lives in a widget's top-right corner) */
+  .wexpand {
+    position: absolute;
+    top: 11px; right: 12px;
+    z-index: 2;
+    background: rgba(79,230,255,0.06);
+    border: 1px solid var(--panel-edge);
+    color: var(--cyan);
+    width: 22px; height: 22px;
+    border-radius: 4px;
+    display: grid; place-items: center;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    line-height: 1;
+    transition: 0.2s;
+    padding: 0;
     pointer-events: auto;
-    padding: 6px 10px;
-    border-top: 1px solid rgba(79,230,255,0.12);
-    border-bottom: 1px solid rgba(79,230,255,0.12);
-    position: relative;
   }
-  .devices::before, .devices::after {
-    content: ""; position: absolute; height: 1px;
-    left: 8%; right: 8%; pointer-events: none;
+  .wexpand:hover { background: rgba(79,230,255,0.2); box-shadow: 0 0 10px rgba(79,230,255,0.35); color: #eafdff; }
+  .wexpand .ic { display: inline-block; transition: transform 0.35s ease; line-height: 1; }
+  .widget.expanded .wexpand .ic { transform: rotate(180deg); }
+
+  /* devices widget body: compact 4-col icon grid, expands to 2-col with names */
+  .devbody {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    transition: grid-template-columns 0.35s ease;
   }
-  .devices::before { top: -1px; background: linear-gradient(90deg, transparent, var(--cyan), transparent); opacity: 0.4; filter: blur(0.4px); }
-  .devices::after  { bottom: -1px; background: linear-gradient(90deg, transparent, var(--cyan), transparent); opacity: 0.4; filter: blur(0.4px); }
+  .widget.expanded .devbody { grid-template-columns: repeat(2, 1fr); }
+
   .device {
     position: relative;
-    flex: 0 1 108px; min-width: 96px;
-    padding: 10px 10px 12px;
+    padding: 8px 4px;
     border: 1px solid var(--panel-edge);
     background: linear-gradient(160deg, rgba(8,22,32,0.7), rgba(4,12,18,0.5));
-    border-radius: 8px;
-    backdrop-filter: blur(6px);
+    border-radius: 6px;
     cursor: pointer;
-    transition: 0.25s;
-    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
-    box-shadow: 0 0 16px rgba(79,230,255,0.04), inset 0 0 10px rgba(79,230,255,0.02);
+    transition: padding 0.25s ease, background 0.25s, border-color 0.25s, transform 0.2s, box-shadow 0.25s;
+    text-align: center;
+    clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 7px 100%, 0 calc(100% - 7px));
+    box-shadow: 0 0 10px rgba(79,230,255,0.04);
   }
   .device:hover {
-    transform: translateY(-2px);
+    transform: translateY(-1px);
     border-color: var(--cyan);
-    box-shadow: 0 0 24px rgba(79,230,255,0.25), inset 0 0 14px rgba(79,230,255,0.08);
+    box-shadow: 0 0 16px rgba(79,230,255,0.25);
   }
-  .device .ico {
-    height: 38px;
-    display: grid; place-items: center;
-    color: var(--muted);
-    transition: 0.3s;
-  }
-  .device .ico svg { width: 30px; height: 30px; opacity: 0.55; transition: 0.3s; }
+  .device .ico { height: 28px; display: grid; place-items: center; color: var(--muted); transition: 0.3s; }
+  .device .ico svg { width: 22px; height: 22px; opacity: 0.6; transition: 0.3s; }
   .device .nm {
     font-family: var(--display); font-weight: 700;
-    font-size: 0.66rem;
-    letter-spacing: 0.22em;
+    font-size: 0.56rem;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
-    text-align: center;
     color: var(--cyan-soft);
-    margin-top: 4px;
+    margin-top: 5px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: none;          /* hidden in compact; hover shows it via title= */
   }
   .device .st {
     font-family: var(--mono);
-    font-size: 0.6rem;
-    letter-spacing: 0.3em;
+    font-size: 0.5rem;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
     color: var(--muted);
-    text-align: center;
-    margin-top: 2px;
+    margin-top: 1px;
+    display: none;
   }
+  .widget.expanded .device { padding: 12px 8px 14px; }
+  .widget.expanded .device .ico { height: 38px; }
+  .widget.expanded .device .ico svg { width: 30px; height: 30px; }
+  .widget.expanded .device .nm,
+  .widget.expanded .device .st { display: block; }
+
   .device.on {
     border-color: rgba(79,230,255,0.7);
     background: linear-gradient(160deg, rgba(16,58,80,0.78), rgba(4,14,22,0.55));
-    box-shadow: 0 0 28px rgba(79,230,255,0.32), inset 0 0 18px rgba(79,230,255,0.18);
+    box-shadow: 0 0 18px rgba(79,230,255,0.28), inset 0 0 12px rgba(79,230,255,0.16);
   }
   .device.on .ico { color: var(--cyan); }
-  .device.on .ico svg { opacity: 1; filter: drop-shadow(0 0 6px var(--cyan)); }
-  .device.on .nm { color: #eafdff; text-shadow: 0 0 12px rgba(79,230,255,0.45); }
+  .device.on .ico svg { opacity: 1; filter: drop-shadow(0 0 5px var(--cyan)); }
+  .device.on .nm { color: #eafdff; text-shadow: 0 0 10px rgba(79,230,255,0.4); }
   .device.on .st { color: var(--cyan); }
-
-  /* fan rotor spins when energized */
   .device.on .fan-icon { animation: fanSpin 1.6s linear infinite; transform-origin: 50% 50%; }
   @keyframes fanSpin { to { transform: rotate(360deg); } }
-
-  /* rgb light cycles hues */
   @keyframes rgbCycle {
     0%   { filter: drop-shadow(0 0 8px #4fe6ff); }
     33%  { filter: drop-shadow(0 0 8px #ff5a9d); }
@@ -549,12 +560,11 @@
   }
   .device.on[data-name="rgb light"] .ico svg { animation: rgbCycle 3.6s linear infinite; }
 
-  /* toggle pulse */
   @keyframes devPulse {
-    0%   { box-shadow: 0 0 0 0 rgba(79,230,255,0.55), inset 0 0 18px rgba(79,230,255,0.18); }
-    100% { box-shadow: 0 0 0 26px rgba(79,230,255,0), inset 0 0 18px rgba(79,230,255,0.18); }
+    0%   { box-shadow: 0 0 0 0 rgba(79,230,255,0.55), inset 0 0 14px rgba(79,230,255,0.18); }
+    100% { box-shadow: 0 0 0 18px rgba(79,230,255,0), inset 0 0 14px rgba(79,230,255,0.18); }
   }
-  .device.pulsed { animation: devPulse 0.75s ease-out; }
+  .device.pulsed { animation: devPulse 0.7s ease-out; }
   .state-card {
     position: relative;
     text-align: center;
@@ -703,7 +713,7 @@
   @media (max-width: 880px) {
     .ui {
       grid-template-columns: 1fr;
-      grid-template-areas: "head" "center" "dock" "left" "right" "foot";
+      grid-template-areas: "head" "center" "left" "right" "foot";
     }
     .clockwrap { display: none; }
   }
@@ -790,23 +800,45 @@
         <div class="keys"><b>UPTIME</b> <span id="uptime">00:00:00</span> &nbsp; <b>NODES</b> <span>8</span> &nbsp; <b>FW</b> <span>v7.39.2</span></div>
       </div>
 
-      <!-- network -->
-      <div class="widget">
+      <!-- devices: expandable card. Hover a tile for its name; click to toggle.
+           Expand button in the corner switches to a roomy 2-col view with labels. -->
+      <div class="widget" id="w-devices">
         <span class="brk tl"></span><span class="brk tr"></span><span class="brk bl"></span><span class="brk br"></span>
-        <div class="wtitle">Network Telemetry <span class="tag">aes-256 / quic</span></div>
-        <div class="spark">
-          <svg viewBox="0 0 100 56" preserveAspectRatio="none">
-            <line class="gridY" x1="0" y1="14" x2="100" y2="14"></line>
-            <line class="gridY" x1="0" y1="28" x2="100" y2="28"></line>
-            <line class="gridY" x1="0" y1="42" x2="100" y2="42"></line>
-            <path class="upL" id="net-up" d=""></path>
-            <path class="dnL" id="net-dn" d=""></path>
-          </svg>
-        </div>
-        <div class="legend">
-          <span><i class="swatch up"></i> <b id="net-up-v">0.0 Mb/s</b> up</span>
-          <span><i class="swatch dn"></i> <b id="net-dn-v">0.0 Mb/s</b> dn</span>
-          <span><b id="net-ping">— ms</b> ping</span>
+        <button class="wexpand" onclick="toggleDevExpand()" aria-label="expand devices"><span class="ic">⌄</span></button>
+        <div class="wtitle">Devices <span class="tag">mesh • <span id="dev-count">8</span> nodes</span></div>
+        <div class="devbody" id="devbody">
+          <div class="device on" data-name="fan 1" title="Fan 1 • on" onclick="toggleDev(this)">
+            <div class="ico"><svg class="fan-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 4 C9 7 9 10 12 10"/><path d="M20 12 C17 9 14 9 14 12"/><path d="M12 20 C15 17 15 14 12 14"/><path d="M4 12 C7 15 10 15 10 12"/></svg></div>
+            <div class="nm">Fan 1</div><div class="st">ENERGIZED</div>
+          </div>
+          <div class="device" data-name="fan 2" title="Fan 2 • off" onclick="toggleDev(this)">
+            <div class="ico"><svg class="fan-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 4 C9 7 9 10 12 10"/><path d="M20 12 C17 9 14 9 14 12"/><path d="M12 20 C15 17 15 14 12 14"/><path d="M4 12 C7 15 10 15 10 12"/></svg></div>
+            <div class="nm">Fan 2</div><div class="st">OFFLINE</div>
+          </div>
+          <div class="device on" data-name="tubelight" title="Tubelight • on" onclick="toggleDev(this)">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="10" width="18" height="4" rx="2" fill="currentColor" fill-opacity="0.25"/><line x1="6" y1="12" x2="18" y2="12" stroke-width="1.6"/></svg></div>
+            <div class="nm">Tubelight</div><div class="st">ENERGIZED</div>
+          </div>
+          <div class="device" data-name="spotlight" title="Spotlight • off" onclick="toggleDev(this)">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 4 L18 18 L6 18 Z" fill="currentColor" fill-opacity="0.18"/><line x1="9" y1="20" x2="15" y2="20" stroke-width="1.6"/></svg></div>
+            <div class="nm">Spotlight</div><div class="st">OFFLINE</div>
+          </div>
+          <div class="device on" data-name="rgb light" title="RGB Light • on" onclick="toggleDev(this)">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 14 Q8 7 12 7 Q16 7 16 14 Z" fill="currentColor" fill-opacity="0.18"/><line x1="9" y1="16" x2="15" y2="16" stroke-width="1.4"/><line x1="10" y1="18.5" x2="14" y2="18.5" stroke-width="1.2"/><circle cx="9.5" cy="11" r="1.2" fill="#ff5a9d" stroke="none"/><circle cx="12" cy="10" r="1.2" fill="#4dffb0" stroke="none"/><circle cx="14.5" cy="11" r="1.2" fill="#7aa8ff" stroke="none"/></svg></div>
+            <div class="nm">RGB Light</div><div class="st">ENERGIZED</div>
+          </div>
+          <div class="device" data-name="night light" title="Night Light • off" onclick="toggleDev(this)">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 14 Q8 7 12 7 Q16 7 16 14 Z" fill="currentColor" fill-opacity="0.22"/><line x1="9" y1="16" x2="15" y2="16"/><line x1="10" y1="18.5" x2="14" y2="18.5" stroke-width="1.2"/><circle cx="10.5" cy="10" r="0.7" fill="currentColor"/></svg></div>
+            <div class="nm">Night Light</div><div class="st">OFFLINE</div>
+          </div>
+          <div class="device on" data-name="socket" title="Socket • on" onclick="toggleDev(this)">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5" y="6" width="14" height="13" rx="2" fill="currentColor" fill-opacity="0.2"/><circle cx="10" cy="11" r="1" fill="currentColor"/><circle cx="14" cy="11" r="1" fill="currentColor"/><rect x="11" y="14.5" width="2" height="3" rx="0.6" fill="currentColor"/></svg></div>
+            <div class="nm">Socket</div><div class="st">ENERGIZED</div>
+          </div>
+          <div class="device" data-name="spare" title="Spare • off" onclick="toggleDev(this)">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 3"><circle cx="12" cy="12" r="7"/></svg></div>
+            <div class="nm">Spare</div><div class="st">OFFLINE</div>
+          </div>
         </div>
       </div>
     </aside>
@@ -819,50 +851,6 @@
         <div class="state-sub" id="state-sub">standby — say "jarvis"</div>
         <div class="transcript" id="transcript"></div>
       </div>
-    </div>
-
-    <!-- device dock — full-width row, kept out of the orb -->
-    <div class="devices">
-        <div class="device on" data-name="fan 1" onclick="toggleDev(this)">
-          <span class="brk tl"></span><span class="brk tr"></span><span class="brk bl"></span><span class="brk br"></span>
-          <div class="ico"><svg class="fan-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 4 C9 7 9 10 12 10"/><path d="M20 12 C17 9 14 9 14 12"/><path d="M12 20 C15 17 15 14 12 14"/><path d="M4 12 C7 15 10 15 10 12"/></svg></div>
-          <div class="nm">Fan 1</div><div class="st">ENERGIZED</div>
-        </div>
-        <div class="device" data-name="fan 2" onclick="toggleDev(this)">
-          <span class="brk tl"></span><span class="brk tr"></span><span class="brk bl"></span><span class="brk br"></span>
-          <div class="ico"><svg class="fan-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 4 C9 7 9 10 12 10"/><path d="M20 12 C17 9 14 9 14 12"/><path d="M12 20 C15 17 15 14 12 14"/><path d="M4 12 C7 15 10 15 10 12"/></svg></div>
-          <div class="nm">Fan 2</div><div class="st">OFFLINE</div>
-        </div>
-        <div class="device on" data-name="tubelight" onclick="toggleDev(this)">
-          <span class="brk tl"></span><span class="brk tr"></span><span class="brk bl"></span><span class="brk br"></span>
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="10" width="18" height="4" rx="2" fill="currentColor" fill-opacity="0.25"/><line x1="6" y1="12" x2="18" y2="12" stroke-width="1.6"/></svg></div>
-          <div class="nm">Tubelight</div><div class="st">ENERGIZED</div>
-        </div>
-        <div class="device" data-name="spotlight" onclick="toggleDev(this)">
-          <span class="brk tl"></span><span class="brk tr"></span><span class="brk bl"></span><span class="brk br"></span>
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 4 L18 18 L6 18 Z" fill="currentColor" fill-opacity="0.18"/><line x1="9" y1="20" x2="15" y2="20" stroke-width="1.6"/></svg></div>
-          <div class="nm">Spotlight</div><div class="st">OFFLINE</div>
-        </div>
-        <div class="device on" data-name="rgb light" onclick="toggleDev(this)">
-          <span class="brk tl"></span><span class="brk tr"></span><span class="brk bl"></span><span class="brk br"></span>
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 14 Q8 7 12 7 Q16 7 16 14 Z" fill="currentColor" fill-opacity="0.18"/><line x1="9" y1="16" x2="15" y2="16" stroke-width="1.4"/><line x1="10" y1="18.5" x2="14" y2="18.5" stroke-width="1.2"/><circle cx="9.5" cy="11" r="1.2" fill="#ff5a9d" stroke="none"/><circle cx="12" cy="10" r="1.2" fill="#4dffb0" stroke="none"/><circle cx="14.5" cy="11" r="1.2" fill="#7aa8ff" stroke="none"/></svg></div>
-          <div class="nm">RGB Light</div><div class="st">ENERGIZED</div>
-        </div>
-        <div class="device" data-name="night light" onclick="toggleDev(this)">
-          <span class="brk tl"></span><span class="brk tr"></span><span class="brk bl"></span><span class="brk br"></span>
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 14 Q8 7 12 7 Q16 7 16 14 Z" fill="currentColor" fill-opacity="0.22"/><line x1="9" y1="16" x2="15" y2="16"/><line x1="10" y1="18.5" x2="14" y2="18.5" stroke-width="1.2"/><circle cx="10.5" cy="10" r="0.7" fill="currentColor"/></svg></div>
-          <div class="nm">Night Light</div><div class="st">OFFLINE</div>
-        </div>
-        <div class="device on" data-name="socket" onclick="toggleDev(this)">
-          <span class="brk tl"></span><span class="brk tr"></span><span class="brk bl"></span><span class="brk br"></span>
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5" y="6" width="14" height="13" rx="2" fill="currentColor" fill-opacity="0.2"/><circle cx="10" cy="11" r="1" fill="currentColor"/><circle cx="14" cy="11" r="1" fill="currentColor"/><rect x="11" y="14.5" width="2" height="3" rx="0.6" fill="currentColor"/></svg></div>
-          <div class="nm">Socket</div><div class="st">ENERGIZED</div>
-        </div>
-        <div class="device" data-name="spare" onclick="toggleDev(this)">
-          <span class="brk tl"></span><span class="brk tr"></span><span class="brk bl"></span><span class="brk br"></span>
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 3"><circle cx="12" cy="12" r="7"/></svg></div>
-          <div class="nm">Spare</div><div class="st">OFFLINE</div>
-        </div>
     </div>
 
     <aside class="rail right">
@@ -1026,10 +1014,17 @@ function toggleDev(el) {
   el.classList.toggle("on");
   const on = el.classList.contains("on");
   el.querySelector(".st").textContent = on ? "ENERGIZED" : "OFFLINE";
+  const nm = el.querySelector(".nm").textContent;
+  el.title = nm + " • " + (on ? "on" : "off");
   el.classList.add("pulsed");
   setTimeout(() => el.classList.remove("pulsed"), 750);
 }
 window.toggleDev = toggleDev;
+
+function toggleDevExpand() {
+  document.getElementById("w-devices").classList.toggle("expanded");
+}
+window.toggleDevExpand = toggleDevExpand;
 
 function flipRandomDevice() {
   const devs = [...document.querySelectorAll(".device")];
