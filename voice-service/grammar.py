@@ -81,6 +81,31 @@ def build_grammar(vocab):
         add(f"launch {app}")
         add(f"start {app}")
 
+    # PC media (transport + volume)
+    for p in (
+        "play", "pause", "play music", "pause music",
+        "next", "skip", "next song",
+        "previous", "previous song", "go back",
+        "volume up", "louder", "volume down", "quieter",
+        "mute", "unmute",
+    ):
+        add(p)
+    for n in ("zero", "ten", "twenty", "thirty", "forty", "fifty",
+              "sixty", "seventy", "eighty", "ninety", "hundred"):
+        add(f"set volume to {n} percent")
+
+    # PC window
+    for p in ("snap left", "snap right", "minimize", "minimize window", "close window"):
+        add(p)
+    for app in apps:
+        add(f"focus {app}")
+
+    # PC shell: "run <recipe>" + confirmation phrases
+    for r in ((vocab or {}).get("shellRecipes", []) or []):
+        add(f"run {r}")
+    for p in ("confirm", "confirmed", "go ahead", "do it", "yes confirm"):
+        add(p)
+
     return phrases, spoken_to_name
 
 

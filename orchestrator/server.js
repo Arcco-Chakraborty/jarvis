@@ -8,6 +8,9 @@ import { openRegistry } from './db/registry.js';
 import { Esp32Switch } from './devices/esp32-switch.js';
 import { parseWithSource } from './intent/index.js';
 import { loadAllowlistSync, makeOpenApp } from './pc/apps.js';
+import { makeMedia } from './pc/media.js';
+import { makeWindow } from './pc/window.js';
+import { loadRecipesSync, makeShell } from './pc/shell.js';
 import { route } from './router.js';
 import { createTelemetry } from './telemetry.js';
 
@@ -48,6 +51,55 @@ function weatherCodeLabel(code) {
 
 // Pure factory — no network, no DB. Dependencies injected for testability.
 // onCommand(text) and onSwitch({target, action}) each resolve to { ok, speak, intent }.
+// Command pipeline with a single pending-confirmation slot for shell intents.
+// A shell intent stashes the resolved command + expiresAt and replies with a
+// prompt; a confirm.yes within TTL executes it. Any other intent clears the slot.
+export function makePipeline({
+  parse, vocab, route,
+  esp32 = null, registry = null,
+  openApp = null, media = null, win = null, shell = null,
+  telemetry = null,
+  now = Date.now, ttlMs = 60_000,
+}) {
+  let pending = null;  // { command, expiresAt } | null
+
+  function log(text, intent, via, ok, speak) {
+    registry?.logCommand?.({ raw_text: text, intent, ok: ok ? 1 : 0, detail: speak });
+    telemetry?.recordCommand?.({ text, intent, via, ok, speak });
+    return { ok, speak, intent, via };
+  }
+  const fresh = () => pending && now() < pending.expiresAt;
+
+  async function onCommand(text) {
+    const { intent, via } = await parse(text, vocab);
+
+    // 1) Confirmation: execute the pending shell command if it's fresh.
+    if (intent?.domain === 'confirm' && intent.action === 'yes') {
+      if (!fresh()) { pending = null; return log(text, intent, via, false, "There's nothing to confirm."); }
+      const cmd = pending.command; pending = null;
+      const { ok, speak } = shell ? shell.execute(cmd) : { ok: false, speak: 'Shell capability not configured.' };
+      return log(text, intent, via, ok, ok ? `Running ${cmd}.` : speak);
+    }
+
+    // 2) Shell intent: look up the recipe + stash the pending; do NOT execute yet.
+    if (intent?.domain === 'pc' && intent.action === 'shell') {
+      const cmd = shell?.lookup?.(intent.target);
+      if (!cmd) { pending = null; return log(text, intent, via, false, `I don't have a recipe called ${intent.target}.`); }
+      pending = { command: cmd, expiresAt: now() + ttlMs };
+      return log(text, intent, via, true, `Should I run ${cmd}? Say confirm to run.`);
+    }
+
+    // 3) Any other command moves the user on; abandon any pending.
+    if (pending) pending = null;
+
+    if (!intent) return log(text, null, null, false, "Sorry, I didn't catch that.");
+    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win });
+    return log(text, intent, via, ok, speak);
+  }
+
+  return { onCommand, _peekPending: () => pending };
+}
+
 export function buildApp({
   esp32, onCommand, onSwitch, telemetry, vocab,
   weatherFetch = fetch,
@@ -195,32 +247,25 @@ export function main() {
   esp32.startPolling();
 
   const allowlist = loadAllowlistSync();
+  const recipes = loadRecipesSync();
   const openApp = makeOpenApp({ allowlist });
+  const media = makeMedia();
+  const winCap = makeWindow();
+  const shell = makeShell({ recipes });
   const vocab = {
     deviceNames: registry.getSwitchNamesByChannel(),
     groupNames: registry.getGroupNames().filter((g) => g !== 'other'),
     appNames: Object.keys(allowlist),
+    shellRecipes: Object.keys(recipes),
   };
   const knownTargets = new Set([...vocab.deviceNames, ...registry.getGroupNames()]);
 
   const telemetry = createTelemetry();
-
-  const runIntent = async (intent, rawText, via) => {
-    const { ok, speak } = await route(intent, { board: esp32, registry, openApp });
-    registry.logCommand({ raw_text: rawText, intent, ok: ok ? 1 : 0, detail: speak });
-    telemetry.recordCommand({ text: rawText, intent, via, ok, speak });
-    return { ok, speak, intent, via };
-  };
-
-  const onCommand = async (text) => {
-    const { intent, via } = await parseWithSource(text, vocab);
-    if (!intent) {
-      registry.logCommand({ raw_text: text, intent: null, ok: 0, detail: 'no match' });
-      telemetry.recordCommand({ text, intent: null, via: null, ok: false, speak: "Sorry, I didn't catch that." });
-      return { ok: false, speak: "Sorry, I didn't catch that.", intent: null, via: null };
-    }
-    return runIntent(intent, text, via);
-  };
+  const pipeline = makePipeline({
+    parse: parseWithSource, vocab, route, esp32, registry,
+    openApp, media, win: winCap, shell, telemetry,
+  });
+  const onCommand = pipeline.onCommand;
 
   const onSwitch = async ({ target, action } = {}) => {
     let intent;
@@ -230,7 +275,11 @@ export function main() {
     } else {
       return { ok: false, speak: "I don't know how to do that.", intent: null, via: 'ui' };
     }
-    return runIntent(intent, `[ui] ${action}${target ? ' ' + target : ''}`, 'ui');
+    const rawText = `[ui] ${action}${target ? ' ' + target : ''}`;
+    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win: winCap });
+    registry.logCommand({ raw_text: rawText, intent, ok: ok ? 1 : 0, detail: speak });
+    telemetry.recordCommand({ text: rawText, intent, via: 'ui', ok, speak });
+    return { ok, speak, intent, via: 'ui' };
   };
 
   buildApp({ esp32, onCommand, onSwitch, telemetry, vocab }).listen(config.port, () => {

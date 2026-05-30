@@ -4,7 +4,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from stt import fetch_vocab, utterance_text_conf, looks_like_command, has_target
+from stt import fetch_vocab, utterance_text_conf, looks_like_command, has_target, is_standalone
 
 
 class FakeResp:
@@ -64,7 +64,11 @@ class LooksLikeCommandTest(unittest.TestCase):
     def test_real_commands_pass(self):
         for t in ["turn off the tubelight", "lights on", "fans off",
                   "is the tubelight on", "turn off all lights except tubelight",
-                  "open chrome", "launch firefox", "start vs code"]:
+                  "open chrome", "launch firefox", "start vs code",
+                  "play music", "pause", "next", "previous song",
+                  "volume up", "mute", "set volume to thirty percent",
+                  "focus chrome", "snap left", "minimize", "close window",
+                  "run free space", "confirm", "go ahead", "do it"]:
             self.assertTrue(looks_like_command(t), t)
 
     def test_stray_fillers_rejected(self):
@@ -75,6 +79,25 @@ class LooksLikeCommandTest(unittest.TestCase):
         # 'on' inside 'iron', 'open' as substring of 'opening', must not match
         self.assertFalse(looks_like_command("iron"))
         self.assertFalse(looks_like_command("opening"))
+
+
+class IsStandaloneTest(unittest.TestCase):
+    def test_standalone_commands_bypass_target_check(self):
+        for t in ["play", "pause", "play music", "next", "skip",
+                  "previous", "go back",
+                  "volume up", "volume down", "louder", "quieter",
+                  "mute", "unmute",
+                  "minimize", "close window", "snap left", "snap right",
+                  "confirm", "go ahead", "do it"]:
+            self.assertTrue(is_standalone(t), t)
+
+    def test_set_volume_with_number_is_standalone(self):
+        self.assertTrue(is_standalone("set volume to thirty percent"))
+        self.assertTrue(is_standalone("set volume to ten percent"))
+
+    def test_random_filler_is_not_standalone(self):
+        for t in ["", "the off", "off", "tubelight", "open"]:
+            self.assertFalse(is_standalone(t), t)
 
 
 class HasTargetTest(unittest.TestCase):

@@ -8,8 +8,30 @@ import time
 from pathlib import Path
 from urllib.request import urlopen
 
-_ON_OFF = re.compile(r"\b(on|off)\b")
-_PC_VERB = re.compile(r"\b(open|launch|start)\b")
+_COMMAND_VERBS = re.compile(
+    r"\b("
+    r"on|off|"                                    # switch
+    r"open|launch|start|focus|"                   # pc apps + window focus
+    r"play|pause|next|skip|previous|"             # media transport
+    r"volume|louder|quieter|mute|unmute|set|"     # media volume
+    r"snap|minimize|close|"                       # window ops
+    r"run|"                                       # shell
+    r"confirm|confirmed|go|do"                    # confirmation
+    r")\b"
+)
+# Complete command phrases that don't name a device/app/recipe (the has_target
+# check would otherwise reject them). Vosk grammar mode only ever emits these
+# as full decoded phrases, so trusting the literal match here is safe.
+STANDALONE = frozenset({
+    "play", "pause", "play music", "pause music", "play pause",
+    "next", "skip", "next song",
+    "previous", "previous song", "go back",
+    "volume up", "louder", "volume down", "quieter",
+    "mute", "unmute",
+    "minimize", "minimize window", "close window",
+    "snap left", "snap right",
+    "confirm", "confirmed", "go ahead", "do it", "yes confirm",
+})
 _DEBUG = bool(os.environ.get("VOICE_DEBUG"))
 
 # Sentinel returned by listen() when the user said "stop" / "cancel" / "never mind".
@@ -24,12 +46,20 @@ def _debug(msg):
 
 
 def looks_like_command(text):
-    """A real command always contains either a switch verb (on|off) or a PC
-    verb (open|launch|start). Rejects stray filler the recognizer emits from
-    noise (e.g. 'the')."""
+    """A real command always contains one of the recognized command verbs.
+    Rejects stray filler the recognizer emits from noise (e.g. 'the')."""
     if not text:
         return False
-    return bool(_ON_OFF.search(text) or _PC_VERB.search(text))
+    return bool(_COMMAND_VERBS.search(text))
+
+
+def is_standalone(text):
+    """Phrases that don't need a target (media/window/confirm)."""
+    if not text:
+        return False
+    if text in STANDALONE:
+        return True
+    return text.startswith("set volume to ")
 
 
 def has_target(text, targets):
@@ -125,10 +155,12 @@ class VoskSTT:
         devices = (vocab.get("deviceNames") or [])
         groups = (vocab.get("groupNames") or [])
         apps = (vocab.get("appNames") or [])
+        recipes = (vocab.get("shellRecipes") or [])
         self._targets = (
             {d.lower() for d in devices}
             | {g.lower() for g in groups}
             | {a.lower() for a in apps}
+            | {r.lower() for r in recipes}
             | {"everything", "all"}
         )
 
@@ -177,7 +209,9 @@ class VoskSTT:
         if norm in STOP_PHRASES:
             _debug(f"STOP heard={norm!r} conf={conf:.2f}")
             return STOP
-        if not looks_like_command(norm) or not has_target(norm, self._targets):
+        if not looks_like_command(norm) or (
+            not has_target(norm, self._targets) and not is_standalone(norm)
+        ):
             _debug(f"REJECT no-command/no-target heard={text!r} conf={conf:.2f}")
             return ""  # partial Vosk output ("the", "off", "the off") -> not a command, retry
         _debug(f"ACCEPT {norm!r} conf={conf:.2f}")

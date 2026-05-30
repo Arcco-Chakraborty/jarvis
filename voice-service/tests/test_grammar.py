@@ -10,6 +10,7 @@ VOCAB = {
     "deviceNames": ["fan 1", "fan 2", "tubelight", "rgb light", "socket"],
     "groupNames": ["lights", "fans"],
     "appNames": ["chrome", "firefox", "vs code"],
+    "shellRecipes": ["free space", "git status"],
 }
 
 
@@ -36,6 +37,16 @@ class GrammarTest(unittest.TestCase):
             "stop", "cancel", "never mind",
             "open chrome", "launch chrome", "start chrome",
             "open vs code", "launch firefox",
+            # media
+            "play", "pause", "next", "previous", "mute",
+            "volume up", "volume down", "louder", "quieter",
+            "set volume to thirty percent", "set volume to hundred percent",
+            # window
+            "snap left", "snap right", "minimize", "close window",
+            "focus chrome",
+            # shell recipes + confirm
+            "run free space", "run git status",
+            "confirm", "go ahead", "do it",
         ]:
             self.assertIn(p, phrases)
         self.assertEqual(mapping["fan one"], "fan 1")

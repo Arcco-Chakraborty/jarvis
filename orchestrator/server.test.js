@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildApp } from './server.js';
+import { buildApp, makePipeline } from './server.js';
 import { createTelemetry } from './telemetry.js';
 
 function stubEsp32(snapshot, online = true) {
@@ -318,6 +318,96 @@ test('GET /vocab returns the injected vocab', async () => {
   } finally {
     server.close();
   }
+});
+
+/* ============================================================
+   makePipeline — confirmation flow for shell intents
+   ============================================================ */
+function pipelineWith({ recipes = {}, shellSpawnCalls = [] } = {}) {
+  const intents = new Map();
+  const route = async (intent) => intent._routeResult ?? { ok: true, speak: 'ROUTED' };
+  const parse = async (text) => intents.get(text) ?? { intent: null, via: null };
+  const shell = {
+    lookup: (name) => recipes[String(name).toLowerCase().trim()] ?? null,
+    execute: (cmd) => { shellSpawnCalls.push(cmd); return { ok: true, speak: 'Done.' }; },
+  };
+  const setIntent = (text, intent, via = 'rules') => intents.set(text, { intent, via });
+  let clock = 1000; const now = () => clock; const advance = (ms) => { clock += ms; };
+  const p = makePipeline({ parse, vocab: {}, route, shell, now, ttlMs: 60_000 });
+  return { ...p, setIntent, advance, route };
+}
+
+test('pipeline: shell intent stashes pending + prompts; confirm executes it', async () => {
+  const sh = [];
+  const p = pipelineWith({ recipes: { 'free space': 'df -h /' }, shellSpawnCalls: sh });
+  p.setIntent('run free space', { domain: 'pc', action: 'shell', target: 'free space' });
+  p.setIntent('confirm',         { domain: 'confirm', action: 'yes' });
+
+  const r1 = await p.onCommand('run free space');
+  assert.equal(r1.ok, true);
+  assert.match(r1.speak, /should i run df -h \/\?/i);
+  assert.equal(sh.length, 0);  // nothing executed yet
+
+  const r2 = await p.onCommand('confirm');
+  assert.equal(r2.ok, true);
+  assert.deepEqual(sh, ['df -h /']);  // executed exactly the proposed command
+});
+
+test('pipeline: confirm without pending is ok:false ("nothing to confirm")', async () => {
+  const p = pipelineWith();
+  p.setIntent('confirm', { domain: 'confirm', action: 'yes' });
+  const r = await p.onCommand('confirm');
+  assert.equal(r.ok, false);
+  assert.match(r.speak, /nothing to confirm/i);
+});
+
+test('pipeline: pending expires after ttlMs', async () => {
+  const sh = [];
+  const p = pipelineWith({ recipes: { ls: 'ls' }, shellSpawnCalls: sh });
+  p.setIntent('run ls',  { domain: 'pc', action: 'shell', target: 'ls' });
+  p.setIntent('confirm', { domain: 'confirm', action: 'yes' });
+  await p.onCommand('run ls');
+  p.advance(61_000);  // past 60s TTL
+  const r = await p.onCommand('confirm');
+  assert.equal(r.ok, false);
+  assert.equal(sh.length, 0);
+});
+
+test('pipeline: a non-confirmation intent while pending discards the pending', async () => {
+  const sh = [];
+  const p = pipelineWith({ recipes: { ls: 'ls' }, shellSpawnCalls: sh });
+  p.setIntent('run ls',     { domain: 'pc', action: 'shell', target: 'ls' });
+  p.setIntent('lights off', { domain: 'switch', action: 'off', target: 'lights' });
+  p.setIntent('confirm',    { domain: 'confirm', action: 'yes' });
+
+  await p.onCommand('run ls');                    // stash
+  const lights = await p.onCommand('lights off'); // moves user on
+  assert.equal(lights.speak, 'ROUTED');
+
+  const r = await p.onCommand('confirm');         // pending should be gone
+  assert.equal(r.ok, false);
+  assert.equal(sh.length, 0);
+});
+
+test('pipeline: unknown recipe is ok:false and does not stash anything', async () => {
+  const sh = [];
+  const p = pipelineWith({ recipes: {}, shellSpawnCalls: sh });
+  p.setIntent('run nuke',  { domain: 'pc', action: 'shell', target: 'nuke' });
+  p.setIntent('confirm',   { domain: 'confirm', action: 'yes' });
+
+  const r1 = await p.onCommand('run nuke');
+  assert.equal(r1.ok, false);
+  const r2 = await p.onCommand('confirm');
+  assert.equal(r2.ok, false);   // nothing was pending
+  assert.equal(sh.length, 0);
+});
+
+test('pipeline: null intent reports "didn\'t catch that"', async () => {
+  const p = pipelineWith();
+  p.setIntent('garble', null);
+  const r = await p.onCommand('garble');
+  assert.equal(r.ok, false);
+  assert.match(r.speak, /didn'?t catch/i);
 });
 
 test('GET /vocab includes appNames when present (voice grammar uses these)', async () => {

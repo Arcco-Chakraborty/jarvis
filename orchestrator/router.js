@@ -5,13 +5,37 @@ function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export async function route(intent, { board, registry, openApp } = {}) {
-  // PC domain: dispatch to the injected capability (no board/registry needed).
+export async function route(intent, { board, registry, openApp, media, window: win } = {}) {
+  // PC domain: each sub-action goes to its injected capability.
   if (intent.domain === 'pc') {
     if (intent.action === 'open_app') {
       if (!openApp) return { ok: false, speak: 'PC capability not configured.' };
       return openApp({ name: intent.target });
     }
+    if (intent.action === 'media') {
+      if (!media) return { ok: false, speak: 'Media capability not configured.' };
+      switch (intent.op) {
+        case 'play_pause':   return media.playPause();
+        case 'next':         return media.next();
+        case 'prev':         return media.prev();
+        case 'volume_up':    return media.volumeUp();
+        case 'volume_down':  return media.volumeDown();
+        case 'mute':         return media.mute();
+        case 'set_volume':   return media.setVolume(intent.arg);
+        default:             return { ok: false, speak: "I don't know how to do that." };
+      }
+    }
+    if (intent.action === 'window') {
+      if (!win) return { ok: false, speak: 'Window capability not configured.' };
+      switch (intent.op) {
+        case 'focus':    return win.focus({ name: intent.arg });
+        case 'snap':     return win.snap({ dir: intent.arg });
+        case 'minimize': return win.minimize();
+        case 'close':    return win.close();
+        default:         return { ok: false, speak: "I don't know how to do that." };
+      }
+    }
+    // shell is handled at the server layer (it needs the pending-confirmation slot).
     return { ok: false, speak: "I don't know how to do that." };
   }
   try {

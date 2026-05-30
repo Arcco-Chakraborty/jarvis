@@ -1,0 +1,10 @@
+{
+  "free space": "df -h /",
+  "update system": "sudo apt update",
+  "check memory": "free -h",
+  "list home": "ls ~",
+  "current uptime": "uptime",
+  "git status": "git status",
+  "screenshot": "gnome-screenshot",
+  "lock screen": "loginctl lock-session"
+}
