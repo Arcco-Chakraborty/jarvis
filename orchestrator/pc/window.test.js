@@ -53,3 +53,36 @@ test('catches spawn errors and reports ok:false', () => {
   assert.equal(r.ok, false);
   assert.match(r.speak, /couldn'?t/i);
 });
+
+test('splitWith focuses & snaps left if A exists; launches if missing; same for B with right', async () => {
+  const calls = [];
+  const proc = { unref: () => {} };
+  const spawn = (bin, args, opts) => { calls.push({ bin, args, opts }); return proc; };
+  const openApp = (a) => { calls.push({ openApp: a.name }); return { ok: true, speak: 'opened' }; };
+  // wmctrl list: A is running, B is not.
+  const listWindows = async () => 'chrome - Google Chrome\n';
+  const sleep = async () => { calls.push('slept'); };
+  const w = makeWindow({ spawn });
+  const res = await w.splitWith({ a: 'chrome', b: 'code' }, { openApp, listWindows, sleep });
+  assert.equal(res.ok, true);
+  assert.match(res.speak, /chrome on the left, code on the right/i);
+  // sequence: focus chrome -> super+Left -> launch code -> sleep -> focus code -> super+Right
+  const seq = calls.filter((c) => c.bin || c.openApp || c === 'slept').map((c) =>
+    c === 'slept' ? 'sleep' :
+    c.openApp ? `openApp:${c.openApp}` :
+    `${c.bin} ${c.args.join(' ')}`);
+  assert.deepEqual(seq, [
+    'wmctrl -a chrome',
+    'xdotool key super+Left',
+    'openApp:code',
+    'sleep',
+    'wmctrl -a code',
+    'xdotool key super+Right',
+  ]);
+});
+
+test('splitWith refuses missing args', async () => {
+  const w = makeWindow({ spawn: () => ({ unref: () => {} }) });
+  assert.equal((await w.splitWith({ a: '', b: 'code' }, {})).ok, false);
+  assert.equal((await w.splitWith({ a: 'a' }, {})).ok, false);
+});
