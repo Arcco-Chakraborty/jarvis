@@ -88,3 +88,39 @@ test('"run <recipe>" -> pc.shell with the recipe name as target', () => {
   assert.deepEqual(matchPcCommand('run git status'),
     { domain:'pc', action:'shell', target:'git status' });
 });
+
+/* ----- spotify_search ----- */
+test('"play music" / "play" stay as play_pause (NOT spotify_search)', () => {
+  assert.deepEqual(matchPcCommand('play music'), { domain:'pc', action:'media', op:'play_pause' });
+  assert.deepEqual(matchPcCommand('play'),       { domain:'pc', action:'media', op:'play_pause' });
+});
+
+test('"play <query>" routes to spotify_search', () => {
+  assert.deepEqual(matchPcCommand('play discover weekly'),
+    { domain:'pc', action:'media', op:'spotify_search', arg:'discover weekly' });
+  assert.deepEqual(matchPcCommand('play bohemian rhapsody'),
+    { domain:'pc', action:'media', op:'spotify_search', arg:'bohemian rhapsody' });
+});
+
+/* ----- browser.search ----- */
+test('"search <topic>" and "search about|for <topic>" route to browser.search', () => {
+  assert.deepEqual(matchPcCommand('search risc-v'),
+    { domain:'pc', action:'browser', op:'search', arg:'risc-v' });
+  assert.deepEqual(matchPcCommand('search about the weather'),
+    { domain:'pc', action:'browser', op:'search', arg:'the weather' });
+  assert.deepEqual(matchPcCommand('search for cats'),
+    { domain:'pc', action:'browser', op:'search', arg:'cats' });
+});
+
+test('"search for" / "search about" with no topic returns null (not a spurious search)', () => {
+  assert.equal(matchPcCommand('search for'), null);
+  assert.equal(matchPcCommand('search about'), null);
+});
+
+/* ----- window.split ----- */
+test('"split A with B" routes to window.split with trimmed multi-word names', () => {
+  assert.deepEqual(matchPcCommand('split chrome with code'),
+    { domain:'pc', action:'window', op:'split', a:'chrome', b:'code' });
+  assert.deepEqual(matchPcCommand('split the firefox with the terminal'),
+    { domain:'pc', action:'window', op:'split', a:'firefox', b:'terminal' });
+});

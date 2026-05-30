@@ -1,7 +1,8 @@
 // Pure rule matcher for the PC domain. Returns one of:
 //   { domain:'pc', action:'open_app',  target }
 //   { domain:'pc', action:'media',     op, arg? }   op: play_pause|next|prev|volume_up|volume_down|mute|set_volume
-//   { domain:'pc', action:'window',    op, arg? }   op: focus|snap|minimize|close
+//   { domain:'pc', action:'window',    op, arg?, a?, b? }   op: focus|snap|minimize|close|split
+//                                                            split uses { a, b }; others use { arg? }
 //   { domain:'pc', action:'shell',     target }     (server wraps this in a confirmation prompt)
 
 function normalize(text) {
@@ -64,6 +65,13 @@ export function matchPcCommand(text) {
   for (const [re, op] of MEDIA_FIXED) {
     if (re.test(norm)) return { domain: 'pc', action: 'media', op };
   }
+
+  // play <query> -> spotify_search (excludes the literal "music" so play_pause keeps winning above)
+  const playQ = norm.match(/^play\s+(?!music$)(.+)$/);
+  if (playQ) {
+    return { domain: 'pc', action: 'media', op: 'spotify_search', arg: playQ[1].trim() };
+  }
+
   const sv = norm.match(SET_VOL);
   if (sv) {
     const n = parseSpokenNumber(sv[1]);
@@ -78,6 +86,24 @@ export function matchPcCommand(text) {
       if (argFrom === 'cap' && m[1]) intent.arg = m[1].trim();
       return intent;
     }
+  }
+
+  // search [about|for] <topic> -> browser.search
+  const sQ = norm.match(/^search(?:\s+(?:about|for))?\s+(.+)$/);
+  if (sQ) {
+    const topic = sQ[1].trim();
+    // reject single-word prepositions captured when the optional group was skipped
+    if (topic && topic !== 'about' && topic !== 'for') {
+      return { domain: 'pc', action: 'browser', op: 'search', arg: topic };
+    }
+  }
+
+  // split <a> with <b> -> window.split (strip a leading "the " from each)
+  const sp = norm.match(/^split\s+(.+?)\s+with\s+(.+)$/);
+  if (sp) {
+    const a = sp[1].replace(/^the\s+/, '').trim();
+    const b = sp[2].replace(/^the\s+/, '').trim();
+    if (a && b) return { domain: 'pc', action: 'window', op: 'split', a, b };
   }
 
   // shell recipe — "run <recipe>"
