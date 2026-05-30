@@ -4,7 +4,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from stt import fetch_vocab, utterance_text_conf, looks_like_command
+from stt import fetch_vocab, utterance_text_conf, looks_like_command, has_target
 
 
 class FakeResp:
@@ -73,6 +73,20 @@ class LooksLikeCommandTest(unittest.TestCase):
     def test_on_off_must_be_whole_words(self):
         # substrings like the 'on' in 'iron' must not count as a command
         self.assertFalse(looks_like_command("iron"))
+
+
+class HasTargetTest(unittest.TestCase):
+    TARGETS = {"tubelight", "lights", "fans", "fan 1", "everything", "all"}
+
+    def test_real_commands_have_a_target(self):
+        for t in ["turn off the tubelight", "lights off", "fans on", "everything off", "all off"]:
+            self.assertTrue(has_target(t, self.TARGETS), t)
+
+    def test_partials_without_a_target_are_rejected(self):
+        # the loop-forever bug: Vosk emits a partial that has on/off but no recognizable
+        # target -> orchestrator says "Sorry I didn't catch that" -> infinite loop.
+        for t in ["off", "the off", "on", "fan on"]:
+            self.assertFalse(has_target(t, self.TARGETS), t)
 
 
 if __name__ == "__main__":

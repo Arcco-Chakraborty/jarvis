@@ -83,6 +83,43 @@ class RunConversationTest(unittest.TestCase):
         self.assertEqual(handled, [])
         self.assertEqual(len(misses), 2)
 
+    def test_orchestrator_null_intent_counts_as_a_miss(self):
+        # Defense in depth: even if STT produces non-empty text and the orchestrator
+        # returns "Sorry I didn't catch that" (intent is None), the loop must NOT run
+        # forever. Bounded by max_unrecognized like STT-side misses.
+        class R:
+            def __init__(self, intent):
+                self.intent = intent
+        bad = R(intent=None)
+        results = iter([bad, bad, bad])
+        seq = iter(["lights off", "lights off", "lights off", None])
+        handled = []
+        def hf(t):
+            handled.append(t)
+            return next(results)
+        run_conversation(lambda: next(seq), hf, followup_seconds=5, max_unrecognized=2)
+        # Stops after 2 dispatches whose intent was None (not 3).
+        self.assertEqual(len(handled), 2)
+
+    def test_successful_intent_resets_miss_counter(self):
+        # A successful command (intent is not None) clears the miss streak.
+        class R:
+            def __init__(self, intent):
+                self.intent = intent
+        good = R(intent={"action": "off"})
+        none = R(intent=None)
+        # miss, success (resets), miss, miss, silence
+        results = iter([none, good, none, none])
+        seq = iter(["a", "b", "c", "d", None])
+        handled = []
+        def hf(t):
+            handled.append(t)
+            return next(results)
+        run_conversation(lambda: next(seq), hf, followup_seconds=5, max_unrecognized=2)
+        # With max=2, the success in between prevents the miss counter from ever hitting 2.
+        # All 4 turns processed, then silence ends it.
+        self.assertEqual(len(handled), 4)
+
 
 if __name__ == "__main__":
     unittest.main()

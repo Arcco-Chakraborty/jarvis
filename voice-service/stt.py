@@ -23,6 +23,16 @@ def looks_like_command(text):
     return bool(_ON_OFF.search(text or ""))
 
 
+def has_target(text, targets):
+    """A real command also names what to act on: a device, a group, or a global
+    word like 'everything'/'all'. Rejects partial Vosk outputs like "off" or
+    "the off" that would otherwise be dispatched to the orchestrator and come
+    back as "Sorry I didn't catch that" (causing the conversation loop to spin)."""
+    if not text or not targets:
+        return False
+    return any(t in text for t in targets)
+
+
 class ManualTextInput:
     def transcribe(self):
         try:
@@ -103,6 +113,9 @@ class VoskSTT:
         self.record_seconds = config.record_seconds
         self._grammar = json.dumps(self.phrases + ["[unk]"])
         self.min_conf = getattr(config, "min_confidence", 0.6)
+        devices = (vocab.get("deviceNames") or [])
+        groups = (vocab.get("groupNames") or [])
+        self._targets = {d.lower() for d in devices} | {g.lower() for g in groups} | {"everything", "all"}
 
     def listen(self, max_initial_silence=5.0, max_utterance=12.0):
         from grammar import normalize_transcript
@@ -146,9 +159,9 @@ class VoskSTT:
             _debug(f"REJECT heard={text!r} conf={conf:.2f} (min {self.min_conf})")
             return ""  # heard ambient noise / low-confidence -> not understood, retry
         norm = normalize_transcript(text, self.spoken_to_name)
-        if not looks_like_command(norm):
-            _debug(f"REJECT filler heard={text!r} conf={conf:.2f}")
-            return ""  # stray filler (e.g. "the") -> not a command, retry
+        if not looks_like_command(norm) or not has_target(norm, self._targets):
+            _debug(f"REJECT no-command/no-target heard={text!r} conf={conf:.2f}")
+            return ""  # partial Vosk output ("the", "off", "the off") -> not a command, retry
         _debug(f"ACCEPT {norm!r} conf={conf:.2f}")
         return norm
 
