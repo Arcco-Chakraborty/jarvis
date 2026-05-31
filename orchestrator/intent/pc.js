@@ -40,6 +40,7 @@ const MEDIA_FIXED = [
   [/^(?:volume\s+up|louder|turn\s+(?:it\s+)?up)$/,       'volume_up'],
   [/^(?:volume\s+down|quieter|turn\s+(?:it\s+)?down)$/,  'volume_down'],
   [/^(?:mute|unmute)$/,                                  'mute'],
+  [/^stop(?:\s+(?:the\s+)?music|\s+playing)$/,          'stop_music'],
 ];
 const SET_VOL = /^set\s+volume\s+to\s+(.+?)(?:\s+percent)?$/;
 
@@ -66,10 +67,10 @@ export function matchPcCommand(text) {
     if (re.test(norm)) return { domain: 'pc', action: 'media', op };
   }
 
-  // play <query> -> spotify_search (excludes the literal "music" so play_pause keeps winning above)
+  // play <query> -> music.play (excludes literal "music" so play_pause keeps winning above)
   const playQ = norm.match(/^play\s+(?!music$)(.+)$/);
   if (playQ) {
-    return { domain: 'pc', action: 'media', op: 'spotify_search', arg: playQ[1].trim() };
+    return { domain: 'pc', action: 'media', op: 'play_music', arg: playQ[1].trim() };
   }
 
   const sv = norm.match(SET_VOL);
