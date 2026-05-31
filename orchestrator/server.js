@@ -3,6 +3,7 @@ import os from 'node:os';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import { config, assertEsp32Configured } from './config.js';
 import { openRegistry } from './db/registry.js';
 import { Esp32Switch } from './devices/esp32-switch.js';
@@ -271,7 +272,9 @@ export async function main() {
   const openApp = makeOpenApp({ allowlist: catalogRef });
   const browser = makeBrowser();
   const media = makeMedia();
-  const music = makeMusic();
+  let hasPlayerctl = false;
+  try { execFileSync('which', ['playerctl'], { stdio: 'ignore' }); hasPlayerctl = true; } catch { hasPlayerctl = false; }
+  const music = makeMusic({ hasPlayerctl });
   const knowledge = makeKnowledge();
   const winCap = makeWindow();
   const shell = makeShell({ recipes });
