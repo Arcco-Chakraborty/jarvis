@@ -1,6 +1,6 @@
 # JARVIS — Build Checkpoint / Handoff
 
-**Last updated:** 2026-05-28
+**Last updated:** 2026-05-31
 **Audience:** any AI agent (or human) picking up this project mid-stream.
 **Source of truth:** `PROJECT.md`. This file tracks *state*; PROJECT.md defines *the spec*.
 If the two ever conflict, **PROJECT.md wins** — then fix this file.
@@ -9,6 +9,7 @@ If the two ever conflict, **PROJECT.md wins** — then fix this file.
 
 ## TL;DR — where things stand
 
+- **GPU host + open-vocab Whisper STT — DONE (2026-05-31).** Project moved to a new PC with an **NVIDIA GTX 1650 SUPER (4GB, driver 595 / CUDA 13.2)**. STT swapped from grammar-locked Vosk to **`faster-whisper` `large-v3` on CUDA (`int8`, ~3GB VRAM), open-vocabulary** — you can speak naturally and the orchestrator's existing Gemini fallback parses free-form intent. New `WhisperSTT` backend in `voice-service/stt.py` records via `webrtcvad` endpointing (pure `capture_utterance` helper) and guards Whisper hallucinations via `whisper_transcript` (no_speech_prob / avg_logprob thresholds) — returns the same `None`/`STOP`/`""`/`str` contract as Vosk, so `run_conversation` is reused unchanged. Vosk stays selectable (`VOICE_STT_BACKEND=vosk`). Verified: large-v3 loads on the GPU and correctly transcribed a Piper-synth'd "turn off the tubelight". **Open-vocab note:** Whisper spells non-dictionary device names phonetically (e.g. "tubelight"→"tubalight") — relies on the orchestrator's fuzzy match / Gemini to resolve; watch this in real use. **Wake word stayed openWakeWord `hey_jarvis`** (bundled, fully local) — a Porcupine "jarvis" attempt was reverted because it needs a Picovoice account. **New-PC gotchas (in `requirements.txt`/`run-full.sh`):** `setuptools<81` pinned (webrtcvad imports `pkg_resources`, dropped in setuptools 81); `run-full.sh` globs `.venv/lib/python*/site-packages/nvidia/*/lib` onto `LD_LIBRARY_PATH` (the CUDA-12 runtime wheels are namespace packages, so the lib path can't be found by import). The `.venv` is **uv-managed** (no pip; use `uv pip install --python .venv/bin/python ...`). Config defaults: `VOICE_STT_BACKEND=whisper`, `WHISPER_MODEL=large-v3`, `WHISPER_DEVICE=cuda`. Remaining: in-room spoken end-to-end pass (mic → relay). On branch `gpu-whisper-stt`.
 - **Phase 0 (Scaffold) — DONE.** ESM Node project, seeded SQLite registry, ESP32 adapter wired with polling, `GET /health` + `GET /state` live. `npm test` green.
 - **Phase 1 (Switch control) — DONE.** `POST /command {text}` parses → routes → flips the real relay → returns `{ok, speak, intent}`. 35 tests green.
 - **Web dashboard (Phase 5, pulled forward) — DONE.** `GET /` serves a static control panel; buttons hit `POST /switch`, free text hits `/command`; live state via `/state` polling. 38 tests green.

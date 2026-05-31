@@ -1,9 +1,16 @@
 # JARVIS — GPU Whisper STT + Open-Vocab Voice (design)
 
 **Date:** 2026-05-31
-**Status:** approved, pre-implementation
+**Status:** implemented
 **Supersedes (operationally):** the Vosk grammar-constrained STT default. Vosk code is
 kept as a selectable fallback, not deleted.
+
+> **Update (2026-05-31, during implementation):** §4.2's Porcupine "jarvis" wake word was
+> **reverted**. Picovoice requires a (free) account the user could not create, so the wake
+> word stays **openWakeWord `hey_jarvis`** (bundled, fully local, no account). The
+> `PorcupineWakeListener`, its test, the `pvporcupine` dependency, and the
+> `picovoice_access_key` config field were removed. Everything else in this spec (GPU
+> open-vocab Whisper STT) was implemented as designed.
 
 ---
 
