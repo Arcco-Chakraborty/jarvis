@@ -1,4 +1,5 @@
 import { config } from '../config.js';
+import { callGemini } from './gemini-client.js';
 
 const SWITCH_ACTIONS = new Set(['on', 'off', 'all_off', 'all_on', 'status', 'keep_only']);
 
@@ -84,27 +85,21 @@ function validate(obj, vocab) {
 
 // Classify a command with Gemini. Returns a validated intent or null, never throws.
 export async function geminiClassify(text, vocab, {
-  apiKey = config.geminiApiKey,
-  fetchFn = globalThis.fetch,
+  keys,
+  apiKey,
+  fetchFn,
   model = 'gemini-2.5-flash',
   timeoutMs = 8000,
 } = {}) {
-  if (!apiKey) return null;
+  const keyList = keys ?? (apiKey ? [apiKey] : config.geminiApiKeys);
+  if (!keyList || keyList.length === 0) return null;
+  const body = {
+    contents: [{ parts: [{ text: buildPrompt(text, vocab) }] }],
+    generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+  };
+  const data = await callGemini({ model, body, timeoutMs, fetchFn, keys: keyList });
+  if (!data) return null;
   try {
-    const res = await fetchFn(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: buildPrompt(text, vocab) }] }],
-          generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
-        }),
-        signal: AbortSignal.timeout(timeoutMs),
-      },
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
     const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!raw) return null;
     return validate(JSON.parse(raw), vocab);

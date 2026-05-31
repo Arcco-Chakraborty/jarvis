@@ -177,3 +177,15 @@ test('prompt lists app names and the action menu', async () => {
   assert.match(prompt, /play_music/);
   assert.match(prompt, /shell/);
 });
+
+test('rotates to the second key when the first one fails', async () => {
+  let n = 0;
+  const fetchFn = async () => {
+    n++;
+    if (n === 1) return { ok: false, status: 503, json: async () => ({}) };
+    return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '{"domain":"switch","action":"off","target":"tubelight"}' }] } }] }) };
+  };
+  const r = await geminiClassify('kill the light', VOCAB, { keys: ['k1', 'k2'], fetchFn });
+  assert.deepEqual(r, { domain: 'switch', action: 'off', target: 'tubelight' });
+  assert.equal(n, 2);
+});
