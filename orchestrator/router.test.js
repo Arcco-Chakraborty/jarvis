@@ -199,16 +199,29 @@ test('unreachable board yields the error sentence', async () => {
   registry.close();
 });
 
-test('pc.media spotify_search -> media.playOnSpotify', async () => {
+test('pc.media play_music -> music.play', async () => {
   const calls = [];
-  const media = { playOnSpotify: (a) => { calls.push(a); return { ok: true, speak: 'searching' }; } };
+  const music = { play: (a) => { calls.push(a); return { ok: true, speak: 'playing' }; } };
   const registry = reg();
   const res = await route(
-    { domain:'pc', action:'media', op:'spotify_search', arg:'discover weekly' },
-    { board: fakeBoard(), registry, media },
+    { domain:'pc', action:'media', op:'play_music', arg:'daft punk' },
+    { board: fakeBoard(), registry, music },
   );
-  assert.deepEqual(calls, [{ query: 'discover weekly' }]);
   assert.equal(res.ok, true);
+  assert.deepEqual(calls[0], { query: 'daft punk' });
+  registry.close();
+});
+
+test('pc.media play_pause -> music.pauseResume; stop_music -> music.stop', async () => {
+  const hits = [];
+  const music = {
+    pauseResume: () => { hits.push('pause'); return { ok: true, speak: 'toggling' }; },
+    stop:        () => { hits.push('stop');  return { ok: true, speak: 'stopping' }; },
+  };
+  const registry = reg();
+  await route({ domain:'pc', action:'media', op:'play_pause' }, { board: fakeBoard(), registry, music });
+  await route({ domain:'pc', action:'media', op:'stop_music' }, { board: fakeBoard(), registry, music });
+  assert.deepEqual(hits, ['pause', 'stop']);
   registry.close();
 });
 
