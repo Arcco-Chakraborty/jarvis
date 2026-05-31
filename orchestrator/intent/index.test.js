@@ -51,3 +51,11 @@ test('parseWithSource: rules miss + classify null -> via null', async () => {
   const noop = async () => null;
   assert.deepEqual(await parseWithSource('make me a sandwich', VOCAB, noop), { intent: null, via: null });
 });
+
+test('cascade matches a knowledge question locally as ask (before Gemini)', async () => {
+  let geminiCalled = false;
+  const { intent, via } = await parseWithSource('find out about mars', {}, async () => { geminiCalled = true; return null; });
+  assert.deepEqual(intent, { domain: 'ask', query: 'mars' });
+  assert.equal(via, 'rules');
+  assert.equal(geminiCalled, false);
+});
