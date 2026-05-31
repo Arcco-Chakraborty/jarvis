@@ -15,19 +15,10 @@ export PIPER_VOICE="${PIPER_VOICE:-voice-service/models/en_US-lessac-medium.onnx
 export AUDIO_PLAYER="${AUDIO_PLAYER:-aplay}"
 export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 
-# CTranslate2 (faster-whisper GPU) needs the pip-installed CUDA-12 runtime libs on the path.
-CUDA_LIBS="$(.venv/bin/python - <<'PY'
-import os
-paths = []
-for mod in ("nvidia.cublas.lib", "nvidia.cudnn.lib"):
-    try:
-        m = __import__(mod, fromlist=["__file__"])
-        paths.append(os.path.dirname(m.__file__))
-    except Exception:
-        pass
-print(":".join(paths))
-PY
-)"
+# CTranslate2 (faster-whisper GPU) needs the pip-installed CUDA-12 runtime libs on the
+# path. The nvidia-*-cu12 wheels are namespace packages (no __file__), so glob the lib
+# dirs directly rather than importing them.
+CUDA_LIBS="$(ls -d .venv/lib/python*/site-packages/nvidia/*/lib 2>/dev/null | paste -sd:)"
 export LD_LIBRARY_PATH="${CUDA_LIBS}:${LD_LIBRARY_PATH:-}"
 
 exec .venv/bin/python voice-service/main.py "$@"
