@@ -7,7 +7,7 @@ class VoiceConfig:
     orchestrator_url: str = "http://localhost:3000"
     wake_word: str = "jarvis"
     wake_backend: str = "manual"
-    wake_threshold: float = 0.5
+    wake_threshold: float = 0.35
     wake_model_path: str = ""
     stt_backend: str = "manual"
     tts_backend: str = "console"
@@ -37,7 +37,7 @@ def load_config(env=os.environ):
         orchestrator_url=env.get("ORCHESTRATOR_URL", "http://localhost:3000").rstrip("/"),
         wake_word=env.get("VOICE_WAKE_WORD", "jarvis"),
         wake_backend=env.get("VOICE_WAKE_BACKEND", "manual"),
-        wake_threshold=float(env.get("VOICE_WAKE_THRESHOLD", "0.5")),
+        wake_threshold=float(env.get("VOICE_WAKE_THRESHOLD", "0.35")),
         wake_model_path=env.get("VOICE_WAKE_MODEL", ""),
         stt_backend=env.get("VOICE_STT_BACKEND", "manual"),
         tts_backend=env.get("VOICE_TTS_BACKEND", "console"),

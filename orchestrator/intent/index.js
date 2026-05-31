@@ -24,3 +24,15 @@ export async function parseWithSource(text, vocab, classify = geminiClassify) {
 export async function parse(text, vocab, classify = geminiClassify) {
   return (await parseWithSource(text, vocab, classify)).intent;
 }
+
+// The offline cascade only (switch -> pc -> ask -> confirm), no Gemini. Used
+// for compound-command splitting where we don't want a Gemini call per clause.
+export function parseLocal(text, vocab) {
+  return (
+    matchSwitchCommand(text, vocab) ||
+    matchPcCommand(text) ||
+    matchAsk(text) ||
+    matchConfirm(text) ||
+    null
+  );
+}

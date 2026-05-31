@@ -67,8 +67,9 @@ export function matchPcCommand(text) {
     if (re.test(norm)) return { domain: 'pc', action: 'media', op };
   }
 
-  // play <query> -> music.play (excludes literal "music" so play_pause keeps winning above)
-  const playQ = norm.match(/^play\s+(?!music$)(.+)$/);
+  // play / put on / play me / i want to hear <query> -> music.play
+  // (the bare "play"/"play music"/"pause" cases are caught by MEDIA_FIXED above as play_pause)
+  const playQ = norm.match(/^(?:play(?:\s+me)?|put\s+on|i\s+want\s+to\s+hear)\s+(?!music$)(.+)$/);
   if (playQ) {
     return { domain: 'pc', action: 'media', op: 'play_music', arg: playQ[1].trim() };
   }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parse, parseWithSource } from './index.js';
+import { parse, parseWithSource, parseLocal } from './index.js';
 
 const VOCAB = { deviceNames: ['tubelight'], groupNames: ['lights'] };
 
@@ -58,4 +58,11 @@ test('cascade matches a knowledge question locally as ask (before Gemini)', asyn
   assert.deepEqual(intent, { domain: 'ask', query: 'mars' });
   assert.equal(via, 'rules');
   assert.equal(geminiCalled, false);
+});
+
+test('parseLocal resolves local intents without calling Gemini', async () => {
+  const vocab = { deviceNames: ['tubelight'], groupNames: ['lights'] };
+  assert.deepEqual(parseLocal('turn off the tubelight', vocab), { domain: 'switch', action: 'off', target: 'tubelight' });
+  assert.deepEqual(parseLocal('find out about mars', vocab), { domain: 'ask', query: 'mars' });
+  assert.equal(parseLocal('hmm something vague', vocab), null);
 });

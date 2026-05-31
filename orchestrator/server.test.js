@@ -469,3 +469,32 @@ test('pipeline: a Gemini-proposed raw shell command is gated then executed', asy
   assert.deepEqual(sh, ['apt clean']);
   assert.match(r2.speak, /running apt clean/i);
 });
+
+test('pipeline: a compound utterance routes each clause in order', async () => {
+  const routed = [];
+  const route = async (intent) => { routed.push(intent); return { ok: true, speak: `did ${intent.action}` }; };
+  const splitUtterance = (t) => t.split(' AND ');
+  const parseLocal = (clause) => (
+    clause === 'off' ? { domain: 'switch', action: 'off', target: 'tubelight' } :
+    clause === 'play' ? { domain: 'pc', action: 'media', op: 'play_music', arg: 'x' } : null
+  );
+  const p = makePipeline({ parse: async () => ({ intent: null, via: null }), vocab: {}, route, splitUtterance, parseLocal });
+  const r = await p.onCommand('off AND play');
+  assert.equal(routed.length, 2);
+  assert.deepEqual(routed.map((i) => i.action), ['off', 'media']);
+  assert.equal(r.ok, true);
+  assert.match(r.speak, /did off/);
+  assert.match(r.speak, /did media/);
+});
+
+test('pipeline: not-all-clauses-parse falls back to single-command handling', async () => {
+  let singleParsed = false;
+  const route = async () => ({ ok: true, speak: 'single' });
+  const splitUtterance = (t) => t.split(' AND ');
+  const parseLocal = (clause) => (clause === 'off' ? { domain: 'switch', action: 'off', target: 'tubelight' } : null);
+  const parse = async () => { singleParsed = true; return { intent: { domain: 'switch', action: 'off', target: 'tubelight' }, via: 'rules' }; };
+  const p = makePipeline({ parse, vocab: {}, route, splitUtterance, parseLocal });
+  const r = await p.onCommand('off AND gibberish');
+  assert.equal(singleParsed, true);   // fell through to the single-command parse
+  assert.equal(r.speak, 'single');
+});

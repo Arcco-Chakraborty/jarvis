@@ -13,6 +13,7 @@ export VOICE_TTS_BACKEND="${VOICE_TTS_BACKEND:-piper}"
 export PIPER_COMMAND="${PIPER_COMMAND:-.venv/bin/piper}"
 export PIPER_VOICE="${PIPER_VOICE:-voice-service/models/en_US-lessac-medium.onnx}"
 export AUDIO_PLAYER="${AUDIO_PLAYER:-aplay}"
+export VOICE_WAKE_THRESHOLD="${VOICE_WAKE_THRESHOLD:-0.35}"
 export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 
 # CTranslate2 (faster-whisper GPU) needs the pip-installed CUDA-12 runtime libs on the

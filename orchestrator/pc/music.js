@@ -1,46 +1,47 @@
-// PC capability: music — plays a YouTube search result via mpv + yt-dlp,
-// controlled over mpv's JSON IPC socket. No accounts, no playerctl.
-import { spawn as _spawn } from 'node:child_process';
-import { connect as _connect } from 'node:net';
-import { existsSync as _existsSync } from 'node:fs';
+// PC capability: music — plays the real song by opening its YouTube watch page
+// in the browser (yt-dlp resolves the top result). Transport (pause/stop) goes
+// through playerctl (MPRIS), which controls the browser tab and Spotify alike.
+import { spawn as _spawn, execFile as _execFile } from 'node:child_process';
 
-const SOCKET = '/tmp/jarvis-mpv.sock';
 const OPTS = { detached: true, stdio: 'ignore' };
 
-export function makeMusic({ spawn = _spawn, connect = _connect, exists = _existsSync, socket = SOCKET } = {}) {
-  let proc = null;
+// Default resolver: yt-dlp --get-id "ytsearch1:<query>" -> the top video id.
+function defaultResolve(query) {
+  return new Promise((resolve) => {
+    _execFile('yt-dlp', ['--no-warnings', '--get-id', `ytsearch1:${query}`], { timeout: 15000 }, (err, stdout) => {
+      if (err) return resolve(null);
+      const id = String(stdout).trim().split('\n')[0].trim();
+      resolve(id || null);
+    });
+  });
+}
 
-  function send(command, speak) {
-    if (!exists(socket)) return { ok: false, speak: 'Nothing is playing.' };
-    try {
-      const sock = connect(socket);
-      sock.on?.('error', () => {});             // swallow async socket errors
-      sock.write(JSON.stringify({ command }) + '\n');
-      sock.end?.();
-      return { ok: true, speak };
-    } catch {
-      return { ok: false, speak: 'Nothing is playing.' };
-    }
+export function makeMusic({
+  spawn = _spawn,
+  resolve = defaultResolve,
+  browserCmd = process.env.BROWSER_CMD || 'google-chrome',
+  hasPlayerctl = true,
+} = {}) {
+  function open(url, speak) {
+    try { const p = spawn(browserCmd, [url], OPTS); p?.unref?.(); return { ok: true, speak }; }
+    catch { return { ok: false, speak: "I couldn't open the browser." }; }
   }
-
+  function transport(arg, speak) {
+    if (!hasPlayerctl) return { ok: false, speak: "I can't control playback yet — playerctl isn't installed." };
+    try { const p = spawn('playerctl', [arg], OPTS); p?.unref?.(); return { ok: true, speak }; }
+    catch { return { ok: false, speak: "I couldn't control playback." }; }
+  }
   return {
-    play({ query } = {}) {
+    async play({ query } = {}) {
       const q = String(query ?? '').trim();
       if (!q) return { ok: false, speak: 'I need a song name.' };
-      try {
-        if (proc) { try { proc.kill?.(); } catch {} }
-        proc = spawn('mpv', ['--no-video', '--no-terminal', `--input-ipc-server=${socket}`, `ytdl://ytsearch1:${q}`], OPTS);
-        proc?.unref?.();
-        return { ok: true, speak: `Playing ${q}.` };
-      } catch {
-        return { ok: false, speak: "I couldn't play that." };
-      }
+      const id = await resolve(q);
+      const url = id
+        ? `https://www.youtube.com/watch?v=${id}`
+        : `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+      return open(url, `Playing ${q}.`);
     },
-    pauseResume() { return send(['cycle', 'pause'], 'Toggling playback.'); },
-    stop() {
-      const r = send(['quit'], 'Stopping the music.');
-      proc = null;
-      return r;
-    },
+    pauseResume() { return transport('play-pause', 'Toggling playback.'); },
+    stop() { return transport('stop', 'Stopping the music.'); },
   };
 }
