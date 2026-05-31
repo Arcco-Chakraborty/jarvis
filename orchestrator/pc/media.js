@@ -29,11 +29,5 @@ export function makeMedia({ spawn = _spawn } = {}) {
       const n = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
       return sink(['set-sink-volume', '@DEFAULT_SINK@', `${n}%`], `Volume at ${n} percent.`, 'set the volume');
     },
-    playOnSpotify({ query } = {}) {
-      const q = String(query ?? '').trim();
-      if (!q) return { ok: false, speak: 'I need a song or playlist name.' };
-      const uri = 'spotify:search:' + encodeURIComponent(q);
-      return fire('xdg-open', [uri], `Searching Spotify for ${q}.`, 'open Spotify');
-    },
   };
 }
