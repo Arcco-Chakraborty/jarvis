@@ -15,7 +15,6 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(c.vad_silence_ms, 800)
         self.assertEqual(c.whisper_no_speech_threshold, 0.6)
         self.assertEqual(c.whisper_logprob_threshold, -1.0)
-        self.assertEqual(c.picovoice_access_key, "")
 
     def test_env_overrides(self):
         c = load_config(env={
@@ -24,14 +23,12 @@ class ConfigTest(unittest.TestCase):
             "VOICE_VAD_SILENCE_MS": "500",
             "VOICE_NO_SPEECH_THRESHOLD": "0.4",
             "VOICE_LOGPROB_THRESHOLD": "-1.5",
-            "PICOVOICE_ACCESS_KEY": "abc123",
         })
         self.assertEqual(c.whisper_device, "cpu")
         self.assertEqual(c.vad_aggressiveness, 3)
         self.assertEqual(c.vad_silence_ms, 500)
         self.assertEqual(c.whisper_no_speech_threshold, 0.4)
         self.assertEqual(c.whisper_logprob_threshold, -1.5)
-        self.assertEqual(c.picovoice_access_key, "abc123")
 
 
 if __name__ == "__main__":

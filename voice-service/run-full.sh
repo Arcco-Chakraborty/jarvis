@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 export ORCHESTRATOR_URL="${ORCHESTRATOR_URL:-http://localhost:3000}"
-export VOICE_WAKE_BACKEND="${VOICE_WAKE_BACKEND:-porcupine}"
+export VOICE_WAKE_BACKEND="${VOICE_WAKE_BACKEND:-openwakeword}"
 export VOICE_STT_BACKEND="${VOICE_STT_BACKEND:-whisper}"
 export WHISPER_MODEL="${WHISPER_MODEL:-large-v3}"
 export WHISPER_DEVICE="${WHISPER_DEVICE:-cuda}"

@@ -20,7 +20,6 @@ class VoiceConfig:
     vad_silence_ms: int = 800
     whisper_no_speech_threshold: float = 0.6
     whisper_logprob_threshold: float = -1.0
-    picovoice_access_key: str = ""
     piper_command: str = "piper"
     piper_voice: str = ""
     piper_output_device: str = ""
@@ -52,7 +51,6 @@ def load_config(env=os.environ):
         vad_silence_ms=int(env.get("VOICE_VAD_SILENCE_MS", "800")),
         whisper_no_speech_threshold=float(env.get("VOICE_NO_SPEECH_THRESHOLD", "0.6")),
         whisper_logprob_threshold=float(env.get("VOICE_LOGPROB_THRESHOLD", "-1.0")),
-        picovoice_access_key=env.get("PICOVOICE_ACCESS_KEY", ""),
         piper_command=env.get("PIPER_COMMAND", "piper"),
         piper_voice=env.get("PIPER_VOICE", ""),
         piper_output_device=env.get("PIPER_OUTPUT_DEVICE", ""),
