@@ -52,7 +52,8 @@ Root cause is execution, not intent (`search for X` matches the rule layer fine)
 
 **Responsive recording → thinking:**
 - `WhisperSTT.listen(max_initial_silence, max_utterance, on_transcribing=None)` calls `on_transcribing()` exactly once, right after the recorder returns captured audio (VAD end-of-speech) and before the Whisper call. (Pure helpers unchanged; only `WhisperSTT.listen` gains the optional hook.)
-- `run_conversation` passes `on_transcribing=lambda: reporter.emit("thinking")`, so the HUD flips `recording → thinking` the instant the user stops talking — even though Whisper then takes a few seconds. `None` (no speech) never fires it.
+- The `run_loop` call site passes `on_transcribing=lambda: reporter.emit("transcribing")`. The dashboard's `deriveState()` **already** maps status `"transcribing"` → the `THINKING` card, so no frontend change is needed — it simply never received that event before. `None` (no speech) never fires it.
+- `VoskSTT.listen` also gains an ignored `on_transcribing=None` param so the shared call site works for either backend.
 - `vad_silence_ms` default 800 → **600** (snappier cut-over; still env-tunable).
 
 ---
