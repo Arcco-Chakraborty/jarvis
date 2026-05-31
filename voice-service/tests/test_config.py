@@ -15,6 +15,7 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(c.vad_silence_ms, 600)
         self.assertEqual(c.whisper_no_speech_threshold, 0.6)
         self.assertEqual(c.whisper_logprob_threshold, -1.0)
+        self.assertEqual(c.wake_threshold, 0.35)
 
     def test_env_overrides(self):
         c = load_config(env={
