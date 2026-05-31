@@ -12,7 +12,7 @@ class ConfigTest(unittest.TestCase):
         c = load_config(env={})
         self.assertEqual(c.whisper_device, "cuda")
         self.assertEqual(c.vad_aggressiveness, 2)
-        self.assertEqual(c.vad_silence_ms, 800)
+        self.assertEqual(c.vad_silence_ms, 600)
         self.assertEqual(c.whisper_no_speech_threshold, 0.6)
         self.assertEqual(c.whisper_logprob_threshold, -1.0)
 

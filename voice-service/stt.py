@@ -185,7 +185,7 @@ class VoskSTT:
             | {"everything", "all"}
         )
 
-    def listen(self, max_initial_silence=5.0, max_utterance=12.0):
+    def listen(self, max_initial_silence=5.0, max_utterance=12.0, on_transcribing=None):
         from grammar import normalize_transcript
 
         proc = subprocess.Popen(
@@ -306,11 +306,13 @@ class WhisperSTT:
         self.model = model
         self.recorder = recorder or ArecordVadRecorder(config)
 
-    def listen(self, max_initial_silence=5.0, max_utterance=12.0):
+    def listen(self, max_initial_silence=5.0, max_utterance=12.0, on_transcribing=None):
         pcm = self.recorder(max_initial_silence, max_utterance)
         if not pcm:
             _debug("silence (no speech)")
             return None
+        if on_transcribing is not None:
+            on_transcribing()
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             path = Path(tmp.name)
         try:

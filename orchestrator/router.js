@@ -5,7 +5,7 @@ function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export async function route(intent, { board, registry, openApp, media, window: win, browser } = {}) {
+export async function route(intent, { board, registry, openApp, media, window: win, browser, music } = {}) {
   // PC domain: each sub-action goes to its injected capability.
   if (intent.domain === 'pc') {
     if (intent.action === 'open_app') {
@@ -13,17 +13,18 @@ export async function route(intent, { board, registry, openApp, media, window: w
       return openApp({ name: intent.target });
     }
     if (intent.action === 'media') {
-      if (!media) return { ok: false, speak: 'Media capability not configured.' };
+      const nc = (w) => ({ ok: false, speak: `${w} capability not configured.` });
       switch (intent.op) {
-        case 'play_pause':   return media.playPause();
-        case 'next':         return media.next();
-        case 'prev':         return media.prev();
-        case 'volume_up':    return media.volumeUp();
-        case 'volume_down':  return media.volumeDown();
-        case 'mute':         return media.mute();
-        case 'set_volume':    return media.setVolume(intent.arg);
-        case 'spotify_search': return media.playOnSpotify({ query: intent.arg });
-        default:              return { ok: false, speak: "I don't know how to do that." };
+        case 'play_music':   return music ? music.play({ query: intent.arg }) : nc('Music');
+        case 'play_pause':   return music ? music.pauseResume() : nc('Music');
+        case 'stop_music':   return music ? music.stop() : nc('Music');
+        case 'next':         return media ? media.next() : nc('Media');
+        case 'prev':         return media ? media.prev() : nc('Media');
+        case 'volume_up':    return media ? media.volumeUp() : nc('Media');
+        case 'volume_down':  return media ? media.volumeDown() : nc('Media');
+        case 'mute':         return media ? media.mute() : nc('Media');
+        case 'set_volume':   return media ? media.setVolume(intent.arg) : nc('Media');
+        default:             return { ok: false, speak: "I don't know how to do that." };
       }
     }
     if (intent.action === 'window') {

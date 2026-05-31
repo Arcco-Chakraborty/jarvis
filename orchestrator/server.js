@@ -10,6 +10,7 @@ import { parseWithSource } from './intent/index.js';
 import { buildAppCatalog, makeOpenApp } from './pc/apps.js';
 import { makeBrowser } from './pc/browser.js';
 import { makeMedia } from './pc/media.js';
+import { makeMusic } from './pc/music.js';
 import { makeWindow } from './pc/window.js';
 import { loadRecipesSync, makeShell } from './pc/shell.js';
 import { route } from './router.js';
@@ -58,7 +59,7 @@ function weatherCodeLabel(code) {
 export function makePipeline({
   parse, vocab, route,
   esp32 = null, registry = null,
-  openApp = null, media = null, win = null, shell = null, browser = null,
+  openApp = null, media = null, win = null, shell = null, browser = null, music = null,
   telemetry = null,
   now = Date.now, ttlMs = 60_000,
 }) {
@@ -94,7 +95,7 @@ export function makePipeline({
     if (pending) pending = null;
 
     if (!intent) return log(text, null, null, false, "Sorry, I didn't catch that.");
-    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win, browser });
+    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win, browser, music });
     return log(text, intent, via, ok, speak);
   }
 
@@ -262,6 +263,7 @@ export async function main() {
   const openApp = makeOpenApp({ allowlist: catalogRef });
   const browser = makeBrowser();
   const media = makeMedia();
+  const music = makeMusic();
   const winCap = makeWindow();
   const shell = makeShell({ recipes });
   const vocab = {
@@ -275,7 +277,7 @@ export async function main() {
   const telemetry = createTelemetry();
   const pipeline = makePipeline({
     parse: parseWithSource, vocab, route, esp32, registry,
-    openApp, media, win: winCap, shell, browser, telemetry,
+    openApp, media, win: winCap, shell, browser, music, telemetry,
   });
   const onCommand = pipeline.onCommand;
 
@@ -288,7 +290,7 @@ export async function main() {
       return { ok: false, speak: "I don't know how to do that.", intent: null, via: 'ui' };
     }
     const rawText = `[ui] ${action}${target ? ' ' + target : ''}`;
-    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win: winCap, browser });
+    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win: winCap, browser, music });
     registry.logCommand({ raw_text: rawText, intent, ok: ok ? 1 : 0, detail: speak });
     telemetry.recordCommand({ text: rawText, intent, via: 'ui', ok, speak });
     return { ok, speak, intent, via: 'ui' };

@@ -19,51 +19,22 @@ def handle_text(text, client, speaker):
     return result
 
 
-def run_conversation(listen_fn, handle_fn, reporter=None,
-                     unrecognized_fn=None, cancel_fn=None, max_unrecognized=3):
+def run_conversation(listen_fn, handle_fn, reporter=None):
     """One command per wake. listen_fn returns:
-      None     -> silence (no speech): return, re-arm the wake word.
-      STOP     -> user said 'stop' / 'cancel' / 'never mind': call cancel_fn
-                  (typically a short "Okay." acknowledgment) and return.
-      ""       -> heard speech but not a command: speak 'didn't catch that'
-                  and retry, up to max_unrecognized consecutive misses.
-      str      -> a command: dispatch via handle_fn, then return.
-    A handle_fn result whose `intent is None` (the orchestrator answered
-    "Sorry I didn't catch that") also counts as a miss; without that the
-    loop could spin forever on a partial that slipped past STT."""
-    misses = 0
-    UNSET = object()
-    while True:
-        if reporter is not None:
-            reporter.emit("recording")
-        text = listen_fn()
-        if text is None:
-            return
-        if text is STOP:
-            if cancel_fn is not None:
-                cancel_fn()
-            return
-        if not text:
-            misses += 1
-            if reporter is not None:
-                reporter.emit("unrecognized")
-            if unrecognized_fn is not None:
-                unrecognized_fn()
-            if misses >= max_unrecognized:
-                return
-            continue
-        if reporter is not None:
-            reporter.emit("transcript", text=text)
-        result = handle_fn(text)
-        # The orchestrator already spoke "Sorry I didn't catch that"; don't double-speak.
-        if result is not None and getattr(result, "intent", UNSET) is None:
-            misses += 1
-            if reporter is not None:
-                reporter.emit("unrecognized")
-            if misses >= max_unrecognized:
-                return
-            continue
-        return  # successful command -> re-arm the wake word
+      None  -> silence (no speech): return, re-arm the wake word.
+      STOP  -> user said 'stop'/'cancel'/'never mind': return.
+      ""    -> heard speech but not a command: return silently (no retry, no speak).
+      str   -> a command: dispatch via handle_fn, then return.
+    After any single outcome the loop re-arms the wake word — it does NOT keep
+    listening for follow-ups."""
+    if reporter is not None:
+        reporter.emit("recording")
+    text = listen_fn()
+    if not isinstance(text, str) or not text:
+        return  # None / STOP / "" -> sleep silently until the next wake word
+    if reporter is not None:
+        reporter.emit("transcript", text=text)
+    handle_fn(text)
 
 
 def run_loop(config, client=None, stt=None, wake_listener=None, speaker=None, reporter=None):
@@ -85,12 +56,12 @@ def run_loop(config, client=None, stt=None, wake_listener=None, speaker=None, re
         reporter.emit("awake")
         if hasattr(stt, "listen"):
             run_conversation(
-                listen_fn=lambda: stt.listen(config.followup_seconds, config.max_utterance_seconds),
+                listen_fn=lambda: stt.listen(
+                    config.followup_seconds, config.max_utterance_seconds,
+                    on_transcribing=lambda: reporter.emit("transcribing"),
+                ),
                 handle_fn=lambda t: handle_text(t, client, speaker),
                 reporter=reporter,
-                unrecognized_fn=lambda: speaker.speak("Sorry, I didn't catch that."),
-                cancel_fn=lambda: speaker.speak("Okay."),
-                max_unrecognized=config.max_unrecognized,
             )
         else:
             text = stt.transcribe()

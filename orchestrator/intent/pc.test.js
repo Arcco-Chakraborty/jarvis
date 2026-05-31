@@ -95,11 +95,21 @@ test('"play music" / "play" stay as play_pause (NOT spotify_search)', () => {
   assert.deepEqual(matchPcCommand('play'),       { domain:'pc', action:'media', op:'play_pause' });
 });
 
-test('"play <query>" routes to spotify_search', () => {
+test('"play <query>" routes to play_music', () => {
   assert.deepEqual(matchPcCommand('play discover weekly'),
-    { domain:'pc', action:'media', op:'spotify_search', arg:'discover weekly' });
+    { domain:'pc', action:'media', op:'play_music', arg:'discover weekly' });
   assert.deepEqual(matchPcCommand('play bohemian rhapsody'),
-    { domain:'pc', action:'media', op:'spotify_search', arg:'bohemian rhapsody' });
+    { domain:'pc', action:'media', op:'play_music', arg:'bohemian rhapsody' });
+});
+
+test('"stop music" / "stop the music" / "stop playing" route to stop_music', () => {
+  assert.deepEqual(matchPcCommand('stop music'),      { domain:'pc', action:'media', op:'stop_music' });
+  assert.deepEqual(matchPcCommand('stop the music'),  { domain:'pc', action:'media', op:'stop_music' });
+  assert.deepEqual(matchPcCommand('stop playing'),    { domain:'pc', action:'media', op:'stop_music' });
+});
+
+test('bare "stop" is not a pc command (it is the voice sleep word)', () => {
+  assert.equal(matchPcCommand('stop'), null);
 });
 
 /* ----- browser.search ----- */

@@ -60,17 +60,3 @@ test('catches spawn errors and reports ok:false', () => {
   assert.match(res.speak, /couldn'?t/i);
 });
 
-test('playOnSpotify opens xdg-open with a spotify:search URI', () => {
-  const r = recorder();
-  const m = makeMedia({ spawn: r.spawn });
-  const res = m.playOnSpotify({ query: 'discover weekly' });
-  assert.equal(res.ok, true);
-  assert.equal(r.calls[0].bin, 'xdg-open');
-  assert.equal(r.calls[0].args[0], 'spotify:search:discover%20weekly');
-  assert.match(res.speak, /searching spotify for discover weekly/i);
-});
-
-test('playOnSpotify refuses an empty query', () => {
-  const m = makeMedia({ spawn: () => ({ unref: () => {} }) });
-  assert.equal(m.playOnSpotify({ query: '' }).ok, false);
-});

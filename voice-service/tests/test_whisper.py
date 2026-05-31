@@ -112,5 +112,19 @@ class WhisperSTTListenTest(unittest.TestCase):
         self.assertIs(stt.listen(5.0, 12.0), STOP)
 
 
+class OnTranscribingTest(unittest.TestCase):
+    def test_fires_once_after_capture_for_a_command(self):
+        fired = []
+        stt = make_stt([Seg(" lights on")], pcm=b"\x00" * 960)
+        stt.listen(5.0, 12.0, on_transcribing=lambda: fired.append(1))
+        self.assertEqual(fired, [1])
+
+    def test_not_fired_on_silence(self):
+        fired = []
+        stt = make_stt([], pcm=None)
+        stt.listen(5.0, 12.0, on_transcribing=lambda: fired.append(1))
+        self.assertEqual(fired, [])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
