@@ -141,3 +141,17 @@ test('"split A with B" routes to window.split with trimmed multi-word names', ()
   assert.deepEqual(matchPcCommand('split the firefox with the terminal'),
     { domain:'pc', action:'window', op:'split', a:'firefox', b:'terminal' });
 });
+
+test('natural music phrasings stay local as play_music', () => {
+  assert.deepEqual(matchPcCommand('put on daft punk'),
+    { domain:'pc', action:'media', op:'play_music', arg:'daft punk' });
+  assert.deepEqual(matchPcCommand('play me some jazz'),
+    { domain:'pc', action:'media', op:'play_music', arg:'some jazz' });
+  assert.deepEqual(matchPcCommand('i want to hear queen'),
+    { domain:'pc', action:'media', op:'play_music', arg:'queen' });
+});
+
+test('"play" / "play music" still toggle (play_pause)', () => {
+  assert.deepEqual(matchPcCommand('play'),       { domain:'pc', action:'media', op:'play_pause' });
+  assert.deepEqual(matchPcCommand('play music'), { domain:'pc', action:'media', op:'play_pause' });
+});
