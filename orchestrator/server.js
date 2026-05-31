@@ -7,7 +7,8 @@ import { execFileSync } from 'node:child_process';
 import { config, assertEsp32Configured } from './config.js';
 import { openRegistry } from './db/registry.js';
 import { Esp32Switch } from './devices/esp32-switch.js';
-import { parseWithSource } from './intent/index.js';
+import { parseWithSource, parseLocal as _parseLocal } from './intent/index.js';
+import { splitUtterance as _splitUtterance } from './intent/split.js';
 import { buildAppCatalog, makeOpenApp } from './pc/apps.js';
 import { makeBrowser } from './pc/browser.js';
 import { makeMedia } from './pc/media.js';
@@ -66,6 +67,7 @@ export function makePipeline({
   knowledge = null, persona = null,
   telemetry = null,
   now = Date.now, ttlMs = 60_000,
+  splitUtterance = _splitUtterance, parseLocal = _parseLocal,
 }) {
   let pending = null;  // { command, expiresAt } | null
 
@@ -75,8 +77,30 @@ export function makePipeline({
     return { ok, speak, intent, via };
   }
   const fresh = () => pending && now() < pending.expiresAt;
+  const routeDeps = { board: esp32, registry, openApp, media, win, browser, music, knowledge, persona };
 
   async function onCommand(text) {
+    // 0) Compound command branch: "X and then Y" — runs each clause in order.
+    const clauses = splitUtterance(text);
+    if (clauses.length > 1 && clauses.length <= 5) {
+      const intents = clauses.map((c) => parseLocal(c, vocab));
+      const compound = intents.every(
+        (i) => i && i.domain !== 'confirm' && !(i.domain === 'pc' && i.action === 'shell'),
+      );
+      if (compound) {
+        if (pending) pending = null;
+        const speaks = [];
+        let allOk = true;
+        for (let k = 0; k < clauses.length; k++) {
+          const { ok, speak } = await route(intents[k], routeDeps);
+          log(clauses[k], intents[k], 'rules', ok, speak);
+          speaks.push(speak);
+          if (!ok) allOk = false;
+        }
+        return { ok: allOk, speak: speaks.join(' '), intent: { domain: 'compound', count: clauses.length }, via: 'rules' };
+      }
+    }
+
     const { intent, via } = await parse(text, vocab);
 
     // 1) Confirmation: execute the pending shell command if it's fresh.
@@ -104,7 +128,7 @@ export function makePipeline({
     if (pending) pending = null;
 
     if (!intent) return log(text, null, null, false, "Sorry, I didn't catch that.");
-    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win, browser, music, knowledge, persona });
+    const { ok, speak } = await route(intent, routeDeps);
     return log(text, intent, via, ok, speak);
   }
 
