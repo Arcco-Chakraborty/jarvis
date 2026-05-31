@@ -2,4 +2,6 @@ faster-whisper==1.2.1
 openwakeword==0.4.0
 piper-tts==1.4.2
 webrtcvad==2.0.10
+# webrtcvad imports pkg_resources at import time; setuptools >=81 dropped it.
+setuptools<81
 vosk==0.3.45
