@@ -9,14 +9,21 @@ function recorder() {
   return { calls, spawn };
 }
 
-test('search() calls xdg-open with a URL-encoded google query', () => {
+test('search() launches the default browser (google-chrome) with a URL-encoded google query', () => {
   const r = recorder();
   const b = makeBrowser({ spawn: r.spawn });
   const res = b.search({ query: 'RISC-V instruction set' });
   assert.equal(res.ok, true);
-  assert.equal(r.calls[0].bin, 'xdg-open');
+  assert.equal(r.calls[0].bin, 'google-chrome');
   assert.equal(r.calls[0].args[0], 'https://www.google.com/search?q=RISC-V%20instruction%20set');
   assert.match(res.speak, /searching the web for risc-v instruction set/i);
+});
+
+test('search() honours a custom browserCmd', () => {
+  const r = recorder();
+  const b = makeBrowser({ spawn: r.spawn, browserCmd: 'firefox' });
+  b.search({ query: 'cats' });
+  assert.equal(r.calls[0].bin, 'firefox');
 });
 
 test('search() refuses an empty query', () => {
