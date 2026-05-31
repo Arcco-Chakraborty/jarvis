@@ -66,5 +66,51 @@ class WhisperTranscriptTest(unittest.TestCase):
             whisper_transcript(segs, no_speech_threshold=0.6, logprob_threshold=-1.0), "")
 
 
+from stt import WhisperSTT, STOP
+
+
+class FakeConfig:
+    vad_aggressiveness = 2
+    vad_silence_ms = 800
+    sample_rate = 16000
+    record_seconds = 4.0
+    whisper_no_speech_threshold = 0.6
+    whisper_logprob_threshold = -1.0
+
+
+class FakeModel:
+    def __init__(self, segments):
+        self._segments = segments
+        self.calls = []
+
+    def transcribe(self, path, **kw):
+        self.calls.append(path)
+        return iter(self._segments), object()
+
+
+def make_stt(segments, pcm):
+    stt = WhisperSTT(FakeConfig(), model=FakeModel(segments),
+                     recorder=lambda a, b: pcm)
+    return stt
+
+
+class WhisperSTTListenTest(unittest.TestCase):
+    def test_silence_returns_none(self):
+        stt = make_stt([], pcm=None)
+        self.assertIsNone(stt.listen(5.0, 12.0))
+
+    def test_command_returns_lowercased_text(self):
+        stt = make_stt([Seg(" Turn off the tubelight.")], pcm=b"\x00" * 960)
+        self.assertEqual(stt.listen(5.0, 12.0), "turn off the tubelight")
+
+    def test_filtered_segments_return_empty_miss(self):
+        stt = make_stt([Seg(" Thank you.", no_speech_prob=0.95)], pcm=b"\x00" * 960)
+        self.assertEqual(stt.listen(5.0, 12.0), "")
+
+    def test_stop_phrase_returns_stop_sentinel(self):
+        stt = make_stt([Seg(" Stop.")], pcm=b"\x00" * 960)
+        self.assertIs(stt.listen(5.0, 12.0), STOP)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
