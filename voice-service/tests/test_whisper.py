@@ -37,5 +37,34 @@ class CaptureUtteranceTest(unittest.TestCase):
         self.assertEqual(len(out), 4 * 960)
 
 
+from stt import whisper_transcript
+
+
+class Seg:
+    def __init__(self, text, no_speech_prob=0.0, avg_logprob=0.0):
+        self.text = text
+        self.no_speech_prob = no_speech_prob
+        self.avg_logprob = avg_logprob
+
+
+class WhisperTranscriptTest(unittest.TestCase):
+    def test_joins_good_segments(self):
+        segs = [Seg(" turn off"), Seg(" the tubelight ")]
+        self.assertEqual(
+            whisper_transcript(segs, no_speech_threshold=0.6, logprob_threshold=-1.0),
+            "turn off the tubelight",
+        )
+
+    def test_drops_high_no_speech_prob(self):
+        segs = [Seg(" Thank you.", no_speech_prob=0.9)]
+        self.assertEqual(
+            whisper_transcript(segs, no_speech_threshold=0.6, logprob_threshold=-1.0), "")
+
+    def test_drops_low_avg_logprob(self):
+        segs = [Seg(" mumble", avg_logprob=-2.5)]
+        self.assertEqual(
+            whisper_transcript(segs, no_speech_threshold=0.6, logprob_threshold=-1.0), "")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

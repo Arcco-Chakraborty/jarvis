@@ -178,6 +178,25 @@ def capture_utterance(frames, is_speech, sample_rate=16000, frame_ms=30,
     return b"".join(collected)
 
 
+def whisper_transcript(segments, no_speech_threshold=0.6, logprob_threshold=-1.0):
+    """Join faster-whisper segments into text, dropping hallucinated / no-speech ones.
+
+    Returns the cleaned transcript, or "" if every segment is filtered out.
+    """
+    kept = []
+    for s in segments:
+        nsp = getattr(s, "no_speech_prob", None)
+        if nsp is not None and nsp > no_speech_threshold:
+            continue
+        alp = getattr(s, "avg_logprob", None)
+        if alp is not None and alp < logprob_threshold:
+            continue
+        text = (s.text or "").strip()
+        if text:
+            kept.append(text)
+    return " ".join(kept).strip()
+
+
 class VoskSTT:
     def __init__(self, config, vocab=None):
         from vosk import Model, KaldiRecognizer
