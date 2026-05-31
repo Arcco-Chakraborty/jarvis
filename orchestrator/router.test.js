@@ -257,3 +257,34 @@ test('pc.window split -> window.splitWith with openApp + sleep injected', async 
   assert.equal(calls[0].hasOpenApp, true);
   registry.close();
 });
+
+test('ask -> knowledge.answer', async () => {
+  const calls = [];
+  const knowledge = { answer: async (q) => { calls.push(q); return { ok: true, speak: 'A black hole is...' }; } };
+  const registry = reg();
+  const res = await route({ domain: 'ask', query: 'black holes' }, { board: fakeBoard(), registry, knowledge });
+  assert.equal(res.ok, true);
+  assert.equal(res.speak, 'A black hole is...');
+  assert.deepEqual(calls, ['black holes']);
+  registry.close();
+});
+
+test('persona overrides a successful switch confirmation', async () => {
+  const persona = { phrase: (i) => (i.action === 'off' ? 'Tubelight powered down.' : null) };
+  const registry = reg();
+  const res = await route({ domain: 'switch', action: 'off', target: 'tubelight' },
+    { board: fakeBoard(), registry, persona });
+  assert.equal(res.ok, true);
+  assert.equal(res.speak, 'Tubelight powered down.');
+  registry.close();
+});
+
+test('persona does not touch a failed result', async () => {
+  const persona = { phrase: () => 'should not be used' };
+  const registry = reg();
+  const board = fakeBoard({ throwOnSet: true });
+  const res = await route({ domain: 'switch', action: 'off', target: 'tubelight' }, { board, registry, persona });
+  assert.equal(res.ok, false);
+  assert.notEqual(res.speak, 'should not be used');
+  registry.close();
+});

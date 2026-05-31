@@ -127,6 +127,13 @@ test('"search for" / "search about" with no topic returns null (not a spurious s
   assert.equal(matchPcCommand('search about'), null);
 });
 
+test('"look up <topic>" routes to browser.search (web)', () => {
+  assert.deepEqual(matchPcCommand('look up the weather'),
+    { domain:'pc', action:'browser', op:'search', arg:'the weather' });
+  assert.deepEqual(matchPcCommand('look up risc-v'),
+    { domain:'pc', action:'browser', op:'search', arg:'risc-v' });
+});
+
 /* ----- window.split ----- */
 test('"split A with B" routes to window.split with trimmed multi-word names', () => {
   assert.deepEqual(matchPcCommand('split chrome with code'),

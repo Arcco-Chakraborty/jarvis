@@ -89,8 +89,8 @@ export function matchPcCommand(text) {
     }
   }
 
-  // search [about|for] <topic> -> browser.search
-  const sQ = norm.match(/^search(?:\s+(?:about|for))?\s+(.+)$/);
+  // search / look up <topic> -> browser.search
+  const sQ = norm.match(/^(?:search(?:\s+(?:about|for))?|look\s+up)\s+(.+)$/);
   if (sQ) {
     const topic = sQ[1].trim();
     // reject single-word prepositions captured when the optional group was skipped

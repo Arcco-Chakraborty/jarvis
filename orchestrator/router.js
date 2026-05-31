@@ -5,7 +5,11 @@ function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export async function route(intent, { board, registry, openApp, media, window: win, browser, music } = {}) {
+async function _route(intent, { board, registry, openApp, media, window: win, browser, music, knowledge } = {}) {
+  if (intent.domain === 'ask') {
+    if (!knowledge) return { ok: false, speak: 'Knowledge capability not configured.' };
+    return knowledge.answer(intent.query);
+  }
   // PC domain: each sub-action goes to its injected capability.
   if (intent.domain === 'pc') {
     if (intent.action === 'open_app') {
@@ -110,4 +114,13 @@ export async function route(intent, { board, registry, openApp, media, window: w
   } catch {
     return { ok: false, speak: "I couldn't reach the smart switch." };
   }
+}
+
+export async function route(intent, deps = {}) {
+  const result = await _route(intent, deps);
+  if (result?.ok && deps?.persona) {
+    const quip = deps.persona.phrase(intent);
+    if (quip) return { ...result, speak: quip };
+  }
+  return result;
 }
