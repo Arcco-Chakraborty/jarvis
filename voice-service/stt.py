@@ -138,6 +138,46 @@ def utterance_text_conf(result):
     return text, (1.0 if text else 0.0)
 
 
+def capture_utterance(frames, is_speech, sample_rate=16000, frame_ms=30,
+                      max_initial_silence=5.0, vad_silence_ms=800, max_utterance=12.0):
+    """Endpoint one utterance from a stream of fixed-size PCM frames.
+
+    frames: iterable of equal-size PCM byte chunks (frame_ms each at sample_rate).
+    is_speech: callable(frame_bytes) -> bool.
+    Returns captured PCM bytes (onset through the trailing-silence that closed it),
+    or None if no speech onset occurred within max_initial_silence.
+    """
+    frame_s = frame_ms / 1000.0
+    silence_limit_s = vad_silence_ms / 1000.0
+    collected = []
+    started = False
+    pre_onset_s = 0.0
+    trailing_silence_s = 0.0
+    for frame in frames:
+        speech = is_speech(frame)
+        if not started:
+            if speech:
+                started = True
+                collected.append(frame)
+            else:
+                pre_onset_s += frame_s
+                if pre_onset_s >= max_initial_silence:
+                    return None
+            continue
+        collected.append(frame)
+        if speech:
+            trailing_silence_s = 0.0
+        else:
+            trailing_silence_s += frame_s
+            if trailing_silence_s >= silence_limit_s:
+                break
+        if len(collected) * frame_s >= max_utterance:
+            break
+    if not started:
+        return None
+    return b"".join(collected)
+
+
 class VoskSTT:
     def __init__(self, config, vocab=None):
         from vosk import Model, KaldiRecognizer
