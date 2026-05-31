@@ -456,3 +456,16 @@ test('POST /system/rescan returns 503 if no onRescan is configured', async () =>
     assert.equal(res.status, 503);
   });
 });
+
+test('pipeline: a Gemini-proposed raw shell command is gated then executed', async () => {
+  const sh = [];
+  const p = pipelineWith({ recipes: {}, shellSpawnCalls: sh });
+  p.setIntent('free up disk space', { domain: 'pc', action: 'shell', command: 'apt clean' });
+  p.setIntent('confirm', { domain: 'confirm', action: 'yes' });
+  const r1 = await p.onCommand('free up disk space');
+  assert.match(r1.speak, /should i run apt clean/i);
+  assert.equal(sh.length, 0);   // gated: NOT executed before confirm
+  const r2 = await p.onCommand('confirm');
+  assert.deepEqual(sh, ['apt clean']);
+  assert.match(r2.speak, /running apt clean/i);
+});

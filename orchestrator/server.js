@@ -14,6 +14,8 @@ import { makeMusic } from './pc/music.js';
 import { makeWindow } from './pc/window.js';
 import { loadRecipesSync, makeShell } from './pc/shell.js';
 import { route } from './router.js';
+import { makeKnowledge } from './intent/knowledge.js';
+import * as persona from './intent/persona.js';
 import { createTelemetry } from './telemetry.js';
 
 const WEATHER_LAT = process.env.WEATHER_LAT || '28.36';   // Pilani default
@@ -60,6 +62,7 @@ export function makePipeline({
   parse, vocab, route,
   esp32 = null, registry = null,
   openApp = null, media = null, win = null, shell = null, browser = null, music = null,
+  knowledge = null, persona = null,
   telemetry = null,
   now = Date.now, ttlMs = 60_000,
 }) {
@@ -85,8 +88,13 @@ export function makePipeline({
 
     // 2) Shell intent: look up the recipe + stash the pending; do NOT execute yet.
     if (intent?.domain === 'pc' && intent.action === 'shell') {
-      const cmd = shell?.lookup?.(intent.target);
-      if (!cmd) { pending = null; return log(text, intent, via, false, `I don't have a recipe called ${intent.target}.`); }
+      const raw = typeof intent.command === 'string' ? intent.command.trim() : '';
+      const cmd = raw || shell?.lookup?.(intent.target);
+      if (!cmd) {
+        pending = null;
+        const why = intent.target ? `I don't have a recipe called ${intent.target}.` : "I'm not sure what to run.";
+        return log(text, intent, via, false, why);
+      }
       pending = { command: cmd, expiresAt: now() + ttlMs };
       return log(text, intent, via, true, `Should I run ${cmd}? Say confirm to run.`);
     }
@@ -95,7 +103,7 @@ export function makePipeline({
     if (pending) pending = null;
 
     if (!intent) return log(text, null, null, false, "Sorry, I didn't catch that.");
-    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win, browser, music });
+    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win, browser, music, knowledge, persona });
     return log(text, intent, via, ok, speak);
   }
 
@@ -264,6 +272,7 @@ export async function main() {
   const browser = makeBrowser();
   const media = makeMedia();
   const music = makeMusic();
+  const knowledge = makeKnowledge();
   const winCap = makeWindow();
   const shell = makeShell({ recipes });
   const vocab = {
@@ -277,7 +286,7 @@ export async function main() {
   const telemetry = createTelemetry();
   const pipeline = makePipeline({
     parse: parseWithSource, vocab, route, esp32, registry,
-    openApp, media, win: winCap, shell, browser, music, telemetry,
+    openApp, media, win: winCap, shell, browser, music, knowledge, persona, telemetry,
   });
   const onCommand = pipeline.onCommand;
 
@@ -290,7 +299,7 @@ export async function main() {
       return { ok: false, speak: "I don't know how to do that.", intent: null, via: 'ui' };
     }
     const rawText = `[ui] ${action}${target ? ' ' + target : ''}`;
-    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win: winCap, browser, music });
+    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win: winCap, browser, music, knowledge, persona });
     registry.logCommand({ raw_text: rawText, intent, ok: ok ? 1 : 0, detail: speak });
     telemetry.recordCommand({ text: rawText, intent, via: 'ui', ok, speak });
     return { ok, speak, intent, via: 'ui' };
