@@ -80,6 +80,11 @@ export function matchPcCommand(text) {
     if (n != null) return { domain: 'pc', action: 'media', op: 'set_volume', arg: n };
   }
 
+  // what's open -> list windows
+  if (/^(?:what'?s open|what is open|what windows are open|what windows do i have(?: open)?|list (?:my )?windows)$/.test(norm)) {
+    return { domain: 'pc', action: 'window', op: 'list' };
+  }
+
   // window
   for (const [re, op, argFrom] of WINDOW) {
     const m = norm.match(re);
