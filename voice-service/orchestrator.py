@@ -28,8 +28,16 @@ class OrchestratorClient:
         try:
             with self._opener(req, timeout=self.timeout_s) as res:
                 body = json.loads(res.read().decode("utf-8"))
-        except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError):
-            return CommandResult(False, "I couldn't reach the orchestrator.", None)
+        except HTTPError:
+            return CommandResult(False, "The orchestrator ran into an error, sir.", None)
+        except TimeoutError:  # subclass of OSError — catch before the reach case
+            return CommandResult(False, "The orchestrator took too long to respond, sir.", None)
+        except (URLError, OSError) as e:
+            if isinstance(getattr(e, "reason", None), TimeoutError):
+                return CommandResult(False, "The orchestrator took too long to respond, sir.", None)
+            return CommandResult(False, "I can't reach the orchestrator — make sure it's running, sir.", None)
+        except json.JSONDecodeError:
+            return CommandResult(False, "The orchestrator sent something I couldn't read, sir.", None)
 
         return CommandResult(
             bool(body.get("ok")),
