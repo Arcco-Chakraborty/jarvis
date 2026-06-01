@@ -1,88 +1,93 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeWindow } from './window.js';
+import { makeWindow, resolve } from './window.js';
 
-function recorder() {
+const WINS = [
+  { id: 11, wm_class: 'Google-chrome', focus: false, in_current_workspace: true },
+  { id: 22, wm_class: 'Code', focus: true, in_current_workspace: true },
+  { id: 33, wm_class: 'firefox', focus: false, in_current_workspace: false },
+];
+
+function harness({ wins = WINS, listThrows = false, actionThrows = false } = {}) {
   const calls = [];
-  const proc = { unref: () => {} };
-  const spawn = (bin, args, opts) => { calls.push({ bin, args, opts }); return proc; };
-  return { calls, spawn };
+  const gdbus = async (method, ...args) => {
+    calls.push({ method, args });
+    if (method === 'List') {
+      if (listThrows) throw new Error('no such interface');
+      return `('${JSON.stringify(wins)}',)\n`;
+    }
+    if (actionThrows) throw new Error('window vanished'); // TOCTOU: gone between List and action
+    return '()\n';
+  };
+  const getWorkArea = () => ({ left: [0, 37, 960, 1043], right: [960, 37, 960, 1043] });
+  return { calls, w: makeWindow({ gdbus, getWorkArea }) };
 }
 
-test('focus uses wmctrl -a with the substring match', () => {
-  const r = recorder();
-  const w = makeWindow({ spawn: r.spawn });
-  const res = w.focus({ name: 'chrome' });
-  assert.equal(res.ok, true);
-  assert.deepEqual(r.calls[0], { bin: 'wmctrl', args: ['-a', 'chrome'], opts: { detached: true, stdio: 'ignore' } });
-  assert.match(res.speak, /focusing chrome/i);
+test('resolve matches a spoken name against wm_class (normalized, substring)', () => {
+  assert.equal(resolve('chrome', WINS), 11);
+  assert.equal(resolve('code', WINS), 22);
+  assert.equal(resolve('firefox', WINS), 33);
+  assert.equal(resolve('spotify', WINS), null);
 });
 
-test('focus refuses an empty name', () => {
-  const w = makeWindow({ spawn: () => ({ unref: () => {} }) });
-  assert.equal(w.focus({}).ok, false);
-  assert.equal(w.focus({ name: '' }).ok, false);
+test('focus activates the matched window', async () => {
+  const h = harness();
+  const r = await h.w.focus({ name: 'chrome' });
+  assert.equal(r.ok, true);
+  assert.deepEqual(h.calls.find((c) => c.method === 'Activate'), { method: 'Activate', args: ['11'] });
+  assert.match(r.speak, /chrome/i);
 });
 
-test('snap left/right sends super+Left/Right via xdotool', () => {
-  const r = recorder();
-  const w = makeWindow({ spawn: r.spawn });
-  w.snap({ dir: 'left' });
-  w.snap({ dir: 'right' });
-  assert.deepEqual(r.calls[0], { bin: 'xdotool', args: ['key', 'super+Left'],  opts: { detached: true, stdio: 'ignore' } });
-  assert.deepEqual(r.calls[1], { bin: 'xdotool', args: ['key', 'super+Right'], opts: { detached: true, stdio: 'ignore' } });
-});
-
-test('snap with an unknown direction is ok:false', () => {
-  const w = makeWindow({ spawn: () => ({ unref: () => {} }) });
-  assert.equal(w.snap({ dir: 'sideways' }).ok, false);
-});
-
-test('minimize / close use xdotool on the active window', () => {
-  const r = recorder();
-  const w = makeWindow({ spawn: r.spawn });
-  w.minimize();
-  w.close();
-  assert.deepEqual(r.calls[0].args, ['getactivewindow', 'windowminimize']);
-  assert.deepEqual(r.calls[1].args, ['getactivewindow', 'windowkill']);
-});
-
-test('catches spawn errors and reports ok:false', () => {
-  const w = makeWindow({ spawn: () => { throw new Error('ENOENT'); } });
-  const r = w.minimize();
+test('focus on an unknown window is graceful', async () => {
+  const r = await harness().w.focus({ name: 'spotify' });
   assert.equal(r.ok, false);
-  assert.match(r.speak, /couldn'?t/i);
+  assert.match(r.speak, /don'?t see a window/i);
 });
 
-test('splitWith focuses & snaps left if A exists; launches if missing; same for B with right', async () => {
-  const calls = [];
-  const proc = { unref: () => {} };
-  const spawn = (bin, args, opts) => { calls.push({ bin, args, opts }); return proc; };
-  const openApp = (a) => { calls.push({ openApp: a.name }); return { ok: true, speak: 'opened' }; };
-  // wmctrl list: A is running, B is not.
-  const listWindows = async () => 'chrome - Google Chrome\n';
-  const sleep = async () => { calls.push('slept'); };
-  const w = makeWindow({ spawn });
-  const res = await w.splitWith({ a: 'chrome', b: 'code' }, { openApp, listWindows, sleep });
-  assert.equal(res.ok, true);
-  assert.match(res.speak, /chrome on the left, code on the right/i);
-  // sequence: focus chrome -> super+Left -> launch code -> sleep -> focus code -> super+Right
-  const seq = calls.filter((c) => c.bin || c.openApp || c === 'slept').map((c) =>
-    c === 'slept' ? 'sleep' :
-    c.openApp ? `openApp:${c.openApp}` :
-    `${c.bin} ${c.args.join(' ')}`);
-  assert.deepEqual(seq, [
-    'wmctrl -a chrome',
-    'xdotool key super+Left',
-    'openApp:code',
-    'sleep',
-    'wmctrl -a code',
-    'xdotool key super+Right',
-  ]);
+test('snap left moves the focused window to the left half', async () => {
+  const h = harness();
+  const r = await h.w.snap({ dir: 'left' });
+  assert.equal(r.ok, true);
+  assert.deepEqual(h.calls.find((c) => c.method === 'MoveResize'),
+    { method: 'MoveResize', args: ['22', '0', '37', '960', '1043'] });
 });
 
-test('splitWith refuses missing args', async () => {
-  const w = makeWindow({ spawn: () => ({ unref: () => {} }) });
-  assert.equal((await w.splitWith({ a: '', b: 'code' }, {})).ok, false);
-  assert.equal((await w.splitWith({ a: 'a' }, {})).ok, false);
+test('splitWith positions A left and B right', async () => {
+  const h = harness();
+  const r = await h.w.splitWith({ a: 'chrome', b: 'code' }, {});
+  assert.equal(r.ok, true);
+  const mrs = h.calls.filter((c) => c.method === 'MoveResize');
+  assert.deepEqual(mrs[0], { method: 'MoveResize', args: ['11', '0', '37', '960', '1043'] });
+  assert.deepEqual(mrs[1], { method: 'MoveResize', args: ['22', '960', '37', '960', '1043'] });
+  assert.match(r.speak, /chrome.*left.*code.*right/i);
+});
+
+test('minimize and close target the focused window', async () => {
+  const h = harness();
+  await h.w.minimize();
+  await h.w.close();
+  assert.deepEqual(h.calls.find((c) => c.method === 'Minimize'), { method: 'Minimize', args: ['22'] });
+  assert.deepEqual(h.calls.find((c) => c.method === 'Close'), { method: 'Close', args: ['22'] });
+});
+
+test('list speaks the open window names in the current workspace', async () => {
+  const r = await harness().w.list();
+  assert.equal(r.ok, true);
+  assert.match(r.speak, /chrome/i);
+  assert.match(r.speak, /code/i);
+  assert.doesNotMatch(r.speak, /firefox/i);
+});
+
+test('a missing extension degrades gracefully', async () => {
+  const r = await harness({ listThrows: true }).w.focus({ name: 'chrome' });
+  assert.equal(r.ok, false);
+  assert.match(r.speak, /window calls|extension/i);
+});
+
+test('an action that throws after List (window vanished) never throws — returns ok:false', async () => {
+  const h = harness({ actionThrows: true });
+  for (const r of [await h.w.focus({ name: 'chrome' }), await h.w.snap({ dir: 'left' }), await h.w.minimize(), await h.w.close()]) {
+    assert.equal(r.ok, false);
+    assert.equal(typeof r.speak, 'string');
+  }
 });

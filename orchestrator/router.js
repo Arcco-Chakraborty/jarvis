@@ -43,6 +43,7 @@ async function _route(intent, { board, registry, openApp, media, window: win, br
         case 'minimize': return win.minimize();
         case 'close':    return win.close();
         case 'split':    return win.splitWith({ a: intent.a, b: intent.b }, { openApp });
+        case 'list':     return win.list();
         default:         return { ok: false, speak: "I don't know how to do that." };
       }
     }

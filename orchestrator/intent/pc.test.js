@@ -81,6 +81,13 @@ test('window focus / snap / minimize / close', () => {
     { domain:'pc', action:'window', op:'close' });
 });
 
+test('"what\'s open" / "list my windows" -> window list', () => {
+  assert.deepEqual(matchPcCommand("what's open"), { domain: 'pc', action: 'window', op: 'list' });
+  assert.deepEqual(matchPcCommand('what windows are open'), { domain: 'pc', action: 'window', op: 'list' });
+  assert.deepEqual(matchPcCommand('list my windows'), { domain: 'pc', action: 'window', op: 'list' });
+  assert.deepEqual(matchPcCommand('list windows'), { domain: 'pc', action: 'window', op: 'list' });
+});
+
 /* ----- shell ----- */
 test('"run <recipe>" -> pc.shell with the recipe name as target', () => {
   assert.deepEqual(matchPcCommand('run free space'),

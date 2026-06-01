@@ -308,3 +308,12 @@ test('vision with no capability configured is graceful', async () => {
   assert.match(res.speak, /not configured/i);
   registry.close();
 });
+
+test('window list -> win.list()', async () => {
+  const win = { list: async () => ({ ok: true, speak: 'You have Chrome open, sir.' }) };
+  const registry = reg();
+  const res = await route({ domain: 'pc', action: 'window', op: 'list' }, { board: fakeBoard(), registry, window: win });
+  assert.equal(res.ok, true);
+  assert.match(res.speak, /chrome/i);
+  registry.close();
+});
