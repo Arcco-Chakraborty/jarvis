@@ -17,6 +17,15 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(c.whisper_logprob_threshold, -1.0)
         self.assertEqual(c.wake_threshold, 0.35)
 
+    def test_request_timeout_covers_slow_gemini_paths(self):
+        # The orchestrator's vision/knowledge/classify calls can take up to ~12s
+        # (Gemini). A 5s client timeout falsely reported "couldn't reach the
+        # orchestrator" on slow-but-successful commands. Default must exceed the
+        # slowest server path with margin.
+        c = load_config(env={})
+        self.assertGreaterEqual(c.request_timeout_s, 30)
+        self.assertEqual(load_config(env={"VOICE_REQUEST_TIMEOUT_S": "45"}).request_timeout_s, 45)
+
     def test_env_overrides(self):
         c = load_config(env={
             "WHISPER_DEVICE": "cpu",
