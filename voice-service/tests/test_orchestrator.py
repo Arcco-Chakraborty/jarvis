@@ -46,16 +46,24 @@ class OrchestratorClientTest(unittest.TestCase):
         self.assertEqual(req.full_url, "http://jarvis.local/command")
         self.assertEqual(json.loads(req.data.decode("utf-8")), {"text": "is the tubelight on?"})
 
-    def test_command_failure_returns_speakable_error(self):
+    def test_connection_refused_says_to_start_the_orchestrator(self):
+        from urllib.error import URLError
+
         def opener(req, timeout):
-            raise OSError("down")
+            raise URLError(ConnectionRefusedError(111, "Connection refused"))
 
-        client = OrchestratorClient("http://jarvis.local", opener=opener)
-        result = client.command("hello")
-
+        result = OrchestratorClient("http://jarvis.local", opener=opener).command("hello")
         self.assertFalse(result.ok)
-        self.assertEqual(result.speak, "I couldn't reach the orchestrator.")
+        self.assertIn("running", result.speak.lower())
         self.assertIsNone(result.intent)
+
+    def test_timeout_says_took_too_long(self):
+        def opener(req, timeout):
+            raise TimeoutError("timed out")
+
+        result = OrchestratorClient("http://jarvis.local", opener=opener).command("hello")
+        self.assertFalse(result.ok)
+        self.assertIn("too long", result.speak.lower())
 
 
 if __name__ == "__main__":
