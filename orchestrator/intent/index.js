@@ -1,10 +1,11 @@
 import { matchSwitchCommand } from './rules.js';
 import { matchPcCommand } from './pc.js';
+import { matchVision } from './vision.js';
 import { matchAsk } from './ask.js';
 import { matchConfirm } from './confirm.js';
 import { geminiClassify } from './gemini.js';
 
-// Cascade: switch -> pc -> ask -> confirm -> Gemini.
+// Cascade: switch -> pc -> vision -> ask -> confirm -> Gemini.
 // Confirm sits AFTER pc so phrases like "confirm" only fire when nothing else
 // did; pending-shell handling lives in the server.
 export async function parseWithSource(text, vocab, classify = geminiClassify) {
@@ -12,6 +13,8 @@ export async function parseWithSource(text, vocab, classify = geminiClassify) {
   if (s) return { intent: s, via: 'rules' };
   const p = matchPcCommand(text);
   if (p) return { intent: p, via: 'rules' };
+  const vi = matchVision(text);
+  if (vi) return { intent: vi, via: 'rules' };
   const a = matchAsk(text);
   if (a) return { intent: a, via: 'rules' };
   const c = matchConfirm(text);
@@ -25,12 +28,13 @@ export async function parse(text, vocab, classify = geminiClassify) {
   return (await parseWithSource(text, vocab, classify)).intent;
 }
 
-// The offline cascade only (switch -> pc -> ask -> confirm), no Gemini. Used
+// The offline cascade only (switch -> pc -> vision -> ask -> confirm), no Gemini. Used
 // for compound-command splitting where we don't want a Gemini call per clause.
 export function parseLocal(text, vocab) {
   return (
     matchSwitchCommand(text, vocab) ||
     matchPcCommand(text) ||
+    matchVision(text) ||
     matchAsk(text) ||
     matchConfirm(text) ||
     null

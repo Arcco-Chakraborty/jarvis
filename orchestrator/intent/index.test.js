@@ -66,3 +66,11 @@ test('parseLocal resolves local intents without calling Gemini', async () => {
   assert.deepEqual(parseLocal('find out about mars', vocab), { domain: 'ask', query: 'mars' });
   assert.equal(parseLocal('hmm something vague', vocab), null);
 });
+
+test('cascade matches a vision request locally (before ask/gemini)', async () => {
+  let geminiCalled = false;
+  const { intent, via } = await parseWithSource('look at this', {}, async () => { geminiCalled = true; return null; });
+  assert.deepEqual(intent, { domain: 'vision', source: 'camera', query: 'What do you see?' });
+  assert.equal(via, 'rules');
+  assert.equal(geminiCalled, false);
+});
