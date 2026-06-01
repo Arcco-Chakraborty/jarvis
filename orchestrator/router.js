@@ -5,10 +5,14 @@ function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-async function _route(intent, { board, registry, openApp, media, window: win, browser, music, knowledge } = {}) {
+async function _route(intent, { board, registry, openApp, media, window: win, browser, music, knowledge, vision } = {}) {
   if (intent.domain === 'ask') {
     if (!knowledge) return { ok: false, speak: 'Knowledge capability not configured.' };
     return knowledge.answer(intent.query);
+  }
+  if (intent.domain === 'vision') {
+    if (!vision) return { ok: false, speak: 'Vision capability not configured.' };
+    return vision.look({ source: intent.source, query: intent.query });
   }
   // PC domain: each sub-action goes to its injected capability.
   if (intent.domain === 'pc') {

@@ -498,3 +498,13 @@ test('pipeline: not-all-clauses-parse falls back to single-command handling', as
   assert.equal(singleParsed, true);   // fell through to the single-command parse
   assert.equal(r.speak, 'single');
 });
+
+test('pipeline: a vision intent routes to a vision capability', async () => {
+  const looked = [];
+  const route = async (intent) => { if (intent.domain === 'vision') { looked.push(intent); return { ok: true, speak: 'a mug' }; } return { ok: false, speak: 'x' }; };
+  const parse = async () => ({ intent: { domain: 'vision', source: 'camera', query: 'what is this' }, via: 'rules' });
+  const p = makePipeline({ parse, vocab: {}, route });
+  const r = await p.onCommand('look at this what is this');
+  assert.equal(r.speak, 'a mug');
+  assert.equal(looked.length, 1);
+});

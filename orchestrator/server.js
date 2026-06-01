@@ -15,6 +15,9 @@ import { makeMedia } from './pc/media.js';
 import { makeMusic } from './pc/music.js';
 import { makeWindow } from './pc/window.js';
 import { loadRecipesSync, makeShell } from './pc/shell.js';
+import { makeCapture } from './pc/capture.js';
+import { makeVisionAnswer } from './intent/vision-answer.js';
+import { makeVision } from './pc/vision.js';
 import { route } from './router.js';
 import { makeKnowledge } from './intent/knowledge.js';
 import * as persona from './intent/persona.js';
@@ -64,7 +67,7 @@ export function makePipeline({
   parse, vocab, route,
   esp32 = null, registry = null,
   openApp = null, media = null, win = null, shell = null, browser = null, music = null,
-  knowledge = null, persona = null,
+  knowledge = null, persona = null, vision = null,
   telemetry = null,
   now = Date.now, ttlMs = 60_000,
   splitUtterance = _splitUtterance, parseLocal = _parseLocal,
@@ -77,7 +80,7 @@ export function makePipeline({
     return { ok, speak, intent, via };
   }
   const fresh = () => pending && now() < pending.expiresAt;
-  const routeDeps = { board: esp32, registry, openApp, media, win, browser, music, knowledge, persona };
+  const routeDeps = { board: esp32, registry, openApp, media, win, browser, music, knowledge, persona, vision };
 
   async function onCommand(text) {
     // 0) Compound command branch: "X and then Y" — runs each clause in order.
@@ -300,6 +303,9 @@ export async function main() {
   try { execFileSync('which', ['playerctl'], { stdio: 'ignore' }); hasPlayerctl = true; } catch { hasPlayerctl = false; }
   const music = makeMusic({ hasPlayerctl });
   const knowledge = makeKnowledge();
+  const capture = makeCapture();
+  const visionAnswer = makeVisionAnswer();
+  const vision = makeVision({ camera: capture.camera, screen: capture.screen, describe: visionAnswer.describe });
   const winCap = makeWindow();
   const shell = makeShell({ recipes });
   const vocab = {
@@ -313,7 +319,7 @@ export async function main() {
   const telemetry = createTelemetry();
   const pipeline = makePipeline({
     parse: parseWithSource, vocab, route, esp32, registry,
-    openApp, media, win: winCap, shell, browser, music, knowledge, persona, telemetry,
+    openApp, media, win: winCap, shell, browser, music, knowledge, persona, vision, telemetry,
   });
   const onCommand = pipeline.onCommand;
 
@@ -326,7 +332,7 @@ export async function main() {
       return { ok: false, speak: "I don't know how to do that.", intent: null, via: 'ui' };
     }
     const rawText = `[ui] ${action}${target ? ' ' + target : ''}`;
-    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win: winCap, browser, music, knowledge, persona });
+    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win: winCap, browser, music, knowledge, persona, vision });
     registry.logCommand({ raw_text: rawText, intent, ok: ok ? 1 : 0, detail: speak });
     telemetry.recordCommand({ text: rawText, intent, via: 'ui', ok, speak });
     return { ok, speak, intent, via: 'ui' };
