@@ -43,3 +43,16 @@ test('HTTP error / non-JSON / throw -> graceful fallback, ok:true', async () => 
     assert.match(r.speak, /apolog|knowledge base/i);
   }
 });
+
+test('rotates to the second key when the first throws', async () => {
+  let n = 0;
+  const fetchFn = async () => {
+    n++;
+    if (n === 1) throw new Error('rate limited');
+    return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'Mars is the fourth planet.' }] } }] }) };
+  };
+  const r = await makeKnowledge({ keys: ['k1', 'k2'], fetchFn }).answer('mars');
+  assert.equal(r.ok, true);
+  assert.equal(r.speak, 'Mars is the fourth planet.');
+  assert.equal(n, 2);
+});
