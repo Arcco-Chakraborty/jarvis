@@ -288,3 +288,23 @@ test('persona does not touch a failed result', async () => {
   assert.notEqual(res.speak, 'should not be used');
   registry.close();
 });
+
+test('vision -> vision.look with source and query', async () => {
+  const calls = [];
+  const vision = { look: async (a) => { calls.push(a); return { ok: true, speak: 'a red mug' }; } };
+  const registry = reg();
+  const res = await route({ domain: 'vision', source: 'camera', query: 'what is this' },
+    { board: fakeBoard(), registry, vision });
+  assert.equal(res.ok, true);
+  assert.equal(res.speak, 'a red mug');
+  assert.deepEqual(calls[0], { source: 'camera', query: 'what is this' });
+  registry.close();
+});
+
+test('vision with no capability configured is graceful', async () => {
+  const registry = reg();
+  const res = await route({ domain: 'vision', source: 'camera', query: 'q' }, { board: fakeBoard(), registry });
+  assert.equal(res.ok, false);
+  assert.match(res.speak, /not configured/i);
+  registry.close();
+});
