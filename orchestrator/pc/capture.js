@@ -1,10 +1,9 @@
 // PC capability: capture — grabs an image for the vision feature.
-//   camera(): one frame from /dev/video0 via ffmpeg (scaled, JPEG, to stdout).
+//   phone():  a snapshot from a phone running an IP-Webcam app (HTTP GET -> base64).
 //   screen(): a screenshot via gnome-screenshot (GNOME-Wayland portal).
 // Each returns { ok:true, data:<base64>, mime } or { ok:false, speak:<reason> }.
 // Never throws.
 import { execFile as _execFile } from 'node:child_process';
-import { existsSync as _existsSync } from 'node:fs';
 import { readFile as _readFile, unlink as _unlink } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { randomBytes } from 'node:crypto';
@@ -15,25 +14,23 @@ const EXEC_OPTS = { timeout: 10000, maxBuffer: 64 * 1024 * 1024, encoding: 'buff
 
 export function makeCapture({
   execFile = promisify(_execFile),
-  exists = _existsSync,
   readFile = _readFile,
   unlink = _unlink,
+  fetchFn = fetch,
+  phoneUrl = '',
 } = {}) {
   return {
-    async camera() {
-      if (!exists('/dev/video0')) {
-        return { ok: false, speak: "I don't see a camera connected, sir." };
-      }
+    async phone() {
+      if (!phoneUrl) return { ok: false, speak: "I don't have a phone camera set up, sir." };
       try {
-        const { stdout } = await execFile(
-          'ffmpeg',
-          ['-y', '-f', 'v4l2', '-i', '/dev/video0', '-frames:v', '1',
-           '-vf', 'scale=1024:-1', '-f', 'image2', '-c:v', 'mjpeg', 'pipe:1'],
-          EXEC_OPTS,
-        );
-        return { ok: true, data: Buffer.from(stdout).toString('base64'), mime: 'image/jpeg' };
+        const res = await fetchFn(phoneUrl, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) return { ok: false, speak: "I couldn't reach your phone's camera." };
+        const buf = Buffer.from(await res.arrayBuffer());
+        // Strip any "; charset=..." parameter — Gemini's inlineData wants a bare MIME type.
+        const mime = (res.headers?.get?.('content-type') || 'image/jpeg').split(';')[0].trim();
+        return { ok: true, data: buf.toString('base64'), mime };
       } catch {
-        return { ok: false, speak: "I couldn't get a picture from the camera." };
+        return { ok: false, speak: "I couldn't reach your phone's camera." };
       }
     },
     async screen() {

@@ -2,18 +2,27 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { matchVision } from './vision.js';
 
-test('bare "look at this" -> camera with default query', () => {
-  assert.deepEqual(matchVision('look at this'), { domain: 'vision', source: 'camera', query: 'What do you see?' });
-  assert.deepEqual(matchVision('jarvis, look at that.'), { domain: 'vision', source: 'camera', query: 'What do you see?' });
+test('bare "look at this" -> phone with default query', () => {
+  assert.deepEqual(matchVision('look at this'), { domain: 'vision', source: 'phone', query: 'What do you see?' });
+  assert.deepEqual(matchVision('jarvis, look at that.'), { domain: 'vision', source: 'phone', query: 'What do you see?' });
 });
 
-test('camera phrasings carry the trailing question as the query', () => {
-  assert.deepEqual(matchVision('look at my desk what is this'),
-    { domain: 'vision', source: 'camera', query: 'what is this' });
+test('physical phrasings carry the trailing question and use the phone', () => {
+  assert.deepEqual(matchVision('look at this what is this'),
+    { domain: 'vision', source: 'phone', query: 'what is this' });
   assert.deepEqual(matchVision('what am i holding'),
-    { domain: 'vision', source: 'camera', query: 'What do you see?' });
+    { domain: 'vision', source: 'phone', query: 'What do you see?' });
   assert.deepEqual(matchVision('what is this'),
-    { domain: 'vision', source: 'camera', query: 'What do you see?' });
+    { domain: 'vision', source: 'phone', query: 'What do you see?' });
+});
+
+test('phone-explicit phrasings -> phone', () => {
+  assert.deepEqual(matchVision('look through my phone what is this'),
+    { domain: 'vision', source: 'phone', query: 'what is this' });
+  assert.deepEqual(matchVision('look at my phone'),
+    { domain: 'vision', source: 'phone', query: 'What do you see?' });
+  assert.deepEqual(matchVision('what am i doing'),
+    { domain: 'vision', source: 'phone', query: 'What do you see?' });
 });
 
 test('screen phrasings -> screen source', () => {

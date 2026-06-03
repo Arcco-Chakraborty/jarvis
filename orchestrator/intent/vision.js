@@ -1,5 +1,5 @@
 // Local matcher for "look at this" style vision requests ->
-// { domain:'vision', source:'camera'|'screen', query }. Sits before the ask
+// { domain:'vision', source:'phone'|'screen', query }. Sits before the ask
 // matcher so "what is this" grabs an image instead of a knowledge lookup.
 
 function normalize(text) {
@@ -18,13 +18,16 @@ const DEFAULT_QUERY = 'What do you see?';
 const TRIGGERS = [
   /^look at (?:my |the )?(?:screen|display|monitor)\b\s*(.*)$/,   // screen (explicit)
   /^what(?:'s| is)?\s+on (?:my |the )?(?:screen|display)\b\s*(.*)$/, // screen
-  /^look at (?:this|that)\b\s*(.*)$/,                              // camera
-  /^look at (?:my |the )?(?:desk|camera|webcam)\b\s*(.*)$/,       // camera
-  /^what am i holding\b\s*(.*)$/,                                  // camera
-  /^what(?:'s| is)?\s+(?:this|that)\b\s*(.*)$/,                    // camera
-  /^what(?:'s| is)?\s+on (?:my |the )?desk\b\s*(.*)$/,             // camera
-  /^describe (?:this|that|what you see)\b\s*(.*)$/,                // camera
-  /^what do you see\b\s*(.*)$/,                                    // camera
+  /^look at (?:this|that)\b\s*(.*)$/,                              // phone
+  /^look at (?:my |the )?(?:desk|camera|webcam)\b\s*(.*)$/,       // phone
+  /^look (?:at|through) (?:my |the )?phone\b\s*(.*)$/,            // phone (explicit)
+  /^use (?:my |the )?phone(?: camera)?\b\s*(.*)$/,                // phone (explicit)
+  /^what am i doing\b\s*(.*)$/,                                   // phone
+  /^what am i holding\b\s*(.*)$/,                                  // phone
+  /^what(?:'s| is)?\s+(?:this|that)\b\s*(.*)$/,                    // phone
+  /^what(?:'s| is)?\s+on (?:my |the )?desk\b\s*(.*)$/,             // phone
+  /^describe (?:this|that|what you see)\b\s*(.*)$/,                // phone
+  /^what do you see\b\s*(.*)$/,                                    // phone
 ];
 
 function isScreen(norm) {
@@ -38,7 +41,7 @@ export function matchVision(text) {
     const m = norm.match(re);
     if (m) {
       const query = (m[1] || '').trim() || DEFAULT_QUERY;
-      return { domain: 'vision', source: isScreen(norm) ? 'screen' : 'camera', query };
+      return { domain: 'vision', source: isScreen(norm) ? 'screen' : 'phone', query };
     }
   }
   return null;
