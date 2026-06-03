@@ -51,7 +51,17 @@ const WINDOW = [
   [/^close(?:\s+window)?$/,         'close',    null],
 ];
 
-export function matchPcCommand(text) {
+// Strip a trailing "on (the) <known-pc>" from a target -> { target, machine }.
+function splitMachine(target, pcNames) {
+  for (const name of pcNames) {
+    const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const m = String(target).match(new RegExp(`^(.+?)\\s+on\\s+(?:the\\s+)?${esc}$`));
+    if (m) return { target: m[1].trim(), machine: name };
+  }
+  return { target, machine: null };
+}
+
+export function matchPcCommand(text, vocab = {}) {
   const norm = normalize(text);
   if (!norm) return null;
 
@@ -59,7 +69,10 @@ export function matchPcCommand(text) {
   const open = norm.match(/^(?:open|launch|start)\s+(.+)$/);
   if (open) {
     const target = open[1].replace(/^the\s+/, '').trim();
-    if (target) return { domain: 'pc', action: 'open_app', target };
+    if (target) {
+      const { target: app, machine } = splitMachine(target, vocab.pcNames ?? []);
+      return { domain: 'pc', action: 'open_app', target: app, ...(machine ? { machine } : {}) };
+    }
   }
 
   // media

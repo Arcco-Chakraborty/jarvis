@@ -5,7 +5,7 @@ function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-async function _route(intent, { board, registry, openApp, media, window: win, browser, music, knowledge, vision } = {}) {
+async function _route(intent, { board, registry, openApp, media, window: win, browser, music, knowledge, vision, agentClient, pcAgents } = {}) {
   if (intent.domain === 'ask') {
     if (!knowledge) return { ok: false, speak: 'Knowledge capability not configured.' };
     return knowledge.answer(intent.query);
@@ -17,6 +17,16 @@ async function _route(intent, { board, registry, openApp, media, window: win, br
   // PC domain: each sub-action goes to its injected capability.
   if (intent.domain === 'pc') {
     if (intent.action === 'open_app') {
+      if (intent.machine) {
+        const a = pcAgents?.get?.(intent.machine);
+        if (!a) return { ok: false, speak: `I don't know a PC called ${intent.machine}.` };
+        if (!agentClient) return { ok: false, speak: 'PC agent client not configured.' };
+        const r = await agentClient.run(a.base_url, { capability: 'apps', action: 'open', params: { name: intent.target } });
+        if (r.ok) return { ok: true, speak: r.detail || `Done on ${intent.machine}.` };
+        // 'unreachable' = network failure; any other detail = the agent ran but the action failed.
+        const unreachable = !r.detail || r.detail === 'unreachable';
+        return { ok: false, speak: unreachable ? `I couldn't reach the ${intent.machine}.` : r.detail };
+      }
       if (!openApp) return { ok: false, speak: 'PC capability not configured.' };
       return openApp({ name: intent.target });
     }

@@ -74,3 +74,8 @@ test('cascade matches a vision request locally (before ask/gemini)', async () =>
   assert.equal(via, 'rules');
   assert.equal(geminiCalled, false);
 });
+
+test('cascade passes pcNames so "open x on the desktop" carries a machine', async () => {
+  const { intent } = await parseWithSource('open chrome on the desktop', { pcNames: ['desktop'] }, async () => null);
+  assert.deepEqual(intent, { domain: 'pc', action: 'open_app', target: 'chrome', machine: 'desktop' });
+});

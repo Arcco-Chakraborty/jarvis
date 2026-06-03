@@ -9,6 +9,16 @@ export function parseGeminiKeys(env = process.env) {
   return single ? [single] : [];
 }
 
+// PC_AGENTS: comma-separated "name=baseUrl" pairs.
+export function parsePcAgents(raw = process.env.PC_AGENTS) {
+  return String(raw ?? '')
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => { const i = p.indexOf('='); return i > 0 ? { name: p.slice(0, i).trim(), baseUrl: p.slice(i + 1).trim() } : null; })
+    .filter((a) => a && a.name && a.baseUrl);
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 3000),
   dbPath: process.env.DB_PATH ?? 'orchestrator/db/jarvis.db',
@@ -19,6 +29,7 @@ export const config = {
   geminiApiKey: process.env.GEMINI_API_KEY ?? '', // unused until Phase 4
   geminiApiKeys: parseGeminiKeys(),
   phoneCameraUrl: process.env.PHONE_CAMERA_URL ?? '', // IP Webcam snapshot URL for vision
+  pcAgents: parsePcAgents(),
 };
 
 // Fail fast at boot if the board URL is missing. Pure + injectable so it's testable.

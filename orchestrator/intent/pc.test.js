@@ -162,3 +162,14 @@ test('"play" / "play music" still toggle (play_pause)', () => {
   assert.deepEqual(matchPcCommand('play'),       { domain:'pc', action:'media', op:'play_pause' });
   assert.deepEqual(matchPcCommand('play music'), { domain:'pc', action:'media', op:'play_pause' });
 });
+
+test('open <app> on the <pc> attaches a machine', () => {
+  assert.deepEqual(matchPcCommand('open steam on the desktop', { pcNames: ['desktop'] }),
+    { domain: 'pc', action: 'open_app', target: 'steam', machine: 'desktop' });
+});
+test('open <app> with no known pc stays local (no machine)', () => {
+  assert.deepEqual(matchPcCommand('open steam', { pcNames: ['desktop'] }),
+    { domain: 'pc', action: 'open_app', target: 'steam' });
+  assert.deepEqual(matchPcCommand('open steam on the laptop', { pcNames: ['desktop'] }),
+    { domain: 'pc', action: 'open_app', target: 'steam on the laptop' });
+});

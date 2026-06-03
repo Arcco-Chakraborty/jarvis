@@ -317,3 +317,51 @@ test('window list -> win.list()', async () => {
   assert.match(res.speak, /chrome/i);
   registry.close();
 });
+
+test('open_app with a machine routes to the pc agent', async () => {
+  const calls = [];
+  const agentClient = { run: async (url, body) => { calls.push({ url, body }); return { ok: true, detail: 'Opening steam.' }; } };
+  const pcAgents = { get: (n) => (n === 'desktop' ? { name: 'desktop', base_url: 'http://x:7000' } : undefined) };
+  const registry = reg();
+  const res = await route({ domain: 'pc', action: 'open_app', target: 'steam', machine: 'desktop' },
+    { board: fakeBoard(), registry, agentClient, pcAgents });
+  assert.equal(res.ok, true);
+  assert.equal(res.speak, 'Opening steam.');
+  assert.equal(calls[0].url, 'http://x:7000');
+  assert.deepEqual(calls[0].body, { capability: 'apps', action: 'open', params: { name: 'steam' } });
+  registry.close();
+});
+
+test('a reachable-but-failed remote action surfaces its detail (not "couldn\'t reach")', async () => {
+  const pcAgents = { get: () => ({ name: 'desktop', base_url: 'http://x:7000' }) };
+  const registry = reg();
+  // agent ran but the app launch failed -> detail is a real message, not 'unreachable'
+  const failed = await route({ domain: 'pc', action: 'open_app', target: 'nope', machine: 'desktop' },
+    { board: fakeBoard(), registry, pcAgents, agentClient: { run: async () => ({ ok: false, detail: "I couldn't open nope." }) } });
+  assert.equal(failed.ok, false);
+  assert.match(failed.speak, /couldn'?t open nope/i);
+  // actual network failure -> 'unreachable' maps to the friendly couldn't-reach line
+  const down = await route({ domain: 'pc', action: 'open_app', target: 'x', machine: 'desktop' },
+    { board: fakeBoard(), registry, pcAgents, agentClient: { run: async () => ({ ok: false, detail: 'unreachable' }) } });
+  assert.match(down.speak, /couldn'?t reach the desktop/i);
+  registry.close();
+});
+
+test('open_app with an unknown machine is graceful', async () => {
+  const pcAgents = { get: () => undefined };
+  const registry = reg();
+  const res = await route({ domain: 'pc', action: 'open_app', target: 'steam', machine: 'garage' },
+    { board: fakeBoard(), registry, pcAgents, agentClient: { run: async () => ({ ok: true }) } });
+  assert.equal(res.ok, false);
+  assert.match(res.speak, /don'?t know a pc/i);
+  registry.close();
+});
+
+test('open_app without a machine uses local openApp', async () => {
+  let local = false;
+  const openApp = () => { local = true; return { ok: true, speak: 'Opening steam.' }; };
+  const registry = reg();
+  await route({ domain: 'pc', action: 'open_app', target: 'steam' }, { board: fakeBoard(), registry, openApp });
+  assert.equal(local, true);
+  registry.close();
+});

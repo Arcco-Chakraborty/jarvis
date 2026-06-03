@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { config, assertEsp32Configured } from './config.js';
 import { openRegistry } from './db/registry.js';
 import { Esp32Switch } from './devices/esp32-switch.js';
+import { makePcAgentClient } from './devices/pc-agent-client.js';
 import { parseWithSource, parseLocal as _parseLocal } from './intent/index.js';
 import { splitUtterance as _splitUtterance } from './intent/split.js';
 import { buildAppCatalog, makeOpenApp } from './pc/apps.js';
@@ -68,6 +69,7 @@ export function makePipeline({
   esp32 = null, registry = null,
   openApp = null, media = null, win = null, shell = null, browser = null, music = null,
   knowledge = null, persona = null, vision = null,
+  agentClient = null, pcAgents = null,
   telemetry = null,
   now = Date.now, ttlMs = 60_000,
   splitUtterance = _splitUtterance, parseLocal = _parseLocal,
@@ -80,7 +82,7 @@ export function makePipeline({
     return { ok, speak, intent, via };
   }
   const fresh = () => pending && now() < pending.expiresAt;
-  const routeDeps = { board: esp32, registry, openApp, media, win, browser, music, knowledge, persona, vision };
+  const routeDeps = { board: esp32, registry, openApp, media, win, browser, music, knowledge, persona, vision, agentClient, pcAgents };
 
   async function onCommand(text) {
     // 0) Compound command branch: "X and then Y" — runs each clause in order.
@@ -308,18 +310,21 @@ export async function main() {
   const vision = makeVision({ phone: capture.phone, screen: capture.screen, describe: visionAnswer.describe });
   const winCap = makeWindow();
   const shell = makeShell({ recipes });
+  const agentClient = makePcAgentClient();
+  const pcAgents = { get: registry.getPcAgent };
   const vocab = {
     deviceNames: registry.getSwitchNamesByChannel(),
     groupNames: registry.getGroupNames().filter((g) => g !== 'other'),
     appNames: Object.keys(catalogRef),
     shellRecipes: Object.keys(recipes),
+    pcNames: registry.getPcAgents().map((a) => a.name),
   };
   const knownTargets = new Set([...vocab.deviceNames, ...registry.getGroupNames()]);
 
   const telemetry = createTelemetry();
   const pipeline = makePipeline({
     parse: parseWithSource, vocab, route, esp32, registry,
-    openApp, media, win: winCap, shell, browser, music, knowledge, persona, vision, telemetry,
+    openApp, media, win: winCap, shell, browser, music, knowledge, persona, vision, agentClient, pcAgents, telemetry,
   });
   const onCommand = pipeline.onCommand;
 
@@ -332,7 +337,7 @@ export async function main() {
       return { ok: false, speak: "I don't know how to do that.", intent: null, via: 'ui' };
     }
     const rawText = `[ui] ${action}${target ? ' ' + target : ''}`;
-    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win: winCap, browser, music, knowledge, persona, vision });
+    const { ok, speak } = await route(intent, { board: esp32, registry, openApp, media, win: winCap, browser, music, knowledge, persona, vision, agentClient, pcAgents });
     registry.logCommand({ raw_text: rawText, intent, ok: ok ? 1 : 0, detail: speak });
     telemetry.recordCommand({ text: rawText, intent, via: 'ui', ok, speak });
     return { ok, speak, intent, via: 'ui' };
