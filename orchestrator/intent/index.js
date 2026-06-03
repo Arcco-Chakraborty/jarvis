@@ -11,7 +11,7 @@ import { geminiClassify } from './gemini.js';
 export async function parseWithSource(text, vocab, classify = geminiClassify) {
   const s = matchSwitchCommand(text, vocab);
   if (s) return { intent: s, via: 'rules' };
-  const p = matchPcCommand(text);
+  const p = matchPcCommand(text, vocab);
   if (p) return { intent: p, via: 'rules' };
   const vi = matchVision(text);
   if (vi) return { intent: vi, via: 'rules' };
@@ -33,7 +33,7 @@ export async function parse(text, vocab, classify = geminiClassify) {
 export function parseLocal(text, vocab) {
   return (
     matchSwitchCommand(text, vocab) ||
-    matchPcCommand(text) ||
+    matchPcCommand(text, vocab) ||
     matchVision(text) ||
     matchAsk(text) ||
     matchConfirm(text) ||
