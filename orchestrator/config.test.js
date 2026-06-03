@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assertEsp32Configured, parseGeminiKeys } from './config.js';
+import { assertEsp32Configured, parseGeminiKeys, parsePcAgents } from './config.js';
 
 test('assertEsp32Configured throws when baseUrl is missing', () => {
   assert.throws(
@@ -23,4 +23,13 @@ test('parseGeminiKeys falls back to a lone GEMINI_API_KEY', () => {
 });
 test('parseGeminiKeys returns [] when nothing is set', () => {
   assert.deepEqual(parseGeminiKeys({}), []);
+});
+
+test('parsePcAgents parses name=url pairs', () => {
+  assert.deepEqual(parsePcAgents('desktop=http://x:7000, htpc=http://y:7000'),
+    [{ name: 'desktop', baseUrl: 'http://x:7000' }, { name: 'htpc', baseUrl: 'http://y:7000' }]);
+});
+test('parsePcAgents drops malformed / empty', () => {
+  assert.deepEqual(parsePcAgents(''), []);
+  assert.deepEqual(parsePcAgents('garbage,desktop='), []);
 });
