@@ -18,6 +18,7 @@ export const config = {
   pcAgentToken: process.env.PC_AGENT_TOKEN ?? '', // unused until Phase 3
   geminiApiKey: process.env.GEMINI_API_KEY ?? '', // unused until Phase 4
   geminiApiKeys: parseGeminiKeys(),
+  phoneCameraUrl: process.env.PHONE_CAMERA_URL ?? '', // IP Webcam snapshot URL for vision
 };
 
 // Fail fast at boot if the board URL is missing. Pure + injectable so it's testable.

@@ -303,9 +303,9 @@ export async function main() {
   try { execFileSync('which', ['playerctl'], { stdio: 'ignore' }); hasPlayerctl = true; } catch { hasPlayerctl = false; }
   const music = makeMusic({ hasPlayerctl });
   const knowledge = makeKnowledge();
-  const capture = makeCapture();
+  const capture = makeCapture({ phoneUrl: config.phoneCameraUrl });
   const visionAnswer = makeVisionAnswer();
-  const vision = makeVision({ camera: capture.camera, screen: capture.screen, describe: visionAnswer.describe });
+  const vision = makeVision({ phone: capture.phone, screen: capture.screen, describe: visionAnswer.describe });
   const winCap = makeWindow();
   const shell = makeShell({ recipes });
   const vocab = {
