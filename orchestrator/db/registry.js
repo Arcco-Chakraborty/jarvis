@@ -18,11 +18,11 @@ const CHANNEL_MAP = [
   ['spare', 'other'],
 ];
 
-export function openRegistry({ dbPath = config.dbPath, esp32BaseUrl = config.esp32.baseUrl } = {}) {
+export function openRegistry({ dbPath = config.dbPath, esp32BaseUrl = config.esp32.baseUrl, pcAgents = config.pcAgents } = {}) {
   const db = new Database(dbPath);
   db.pragma('foreign_keys = ON');
   db.exec(readFileSync(SCHEMA_PATH, 'utf8'));
-  seed(db, esp32BaseUrl);
+  seed(db, esp32BaseUrl, pcAgents);
 
   return {
     getBoard: () =>
@@ -39,6 +39,10 @@ export function openRegistry({ dbPath = config.dbPath, esp32BaseUrl = config.esp
         .prepare('SELECT name FROM switches WHERE group_name = ? ORDER BY channel')
         .all(group)
         .map((r) => r.name),
+    getPcAgents: () =>
+      db.prepare("SELECT name, base_url FROM devices WHERE type = 'pc_agent' ORDER BY name").all(),
+    getPcAgent: (name) =>
+      db.prepare("SELECT name, base_url FROM devices WHERE type = 'pc_agent' AND name = ?").get(String(name ?? '')),
     logCommand: ({ raw_text, intent, ok, detail }) =>
       db
         .prepare('INSERT INTO command_log (ts, raw_text, intent, ok, detail) VALUES (?, ?, ?, ?, ?)')
@@ -48,12 +52,15 @@ export function openRegistry({ dbPath = config.dbPath, esp32BaseUrl = config.esp
   };
 }
 
-function seed(db, esp32BaseUrl) {
+function seed(db, esp32BaseUrl, pcAgents = []) {
   const insertDevice = db.prepare(
     "INSERT OR IGNORE INTO devices (name, type, base_url) VALUES ('smartswitch', 'esp32_switch', ?)",
   );
   const insertSwitch = db.prepare(
     'INSERT OR IGNORE INTO switches (name, device_id, channel, group_name) VALUES (?, ?, ?, ?)',
+  );
+  const insertAgent = db.prepare(
+    "INSERT OR IGNORE INTO devices (name, type, base_url) VALUES (?, 'pc_agent', ?)",
   );
   const tx = db.transaction((baseUrl) => {
     insertDevice.run(baseUrl ?? '');
@@ -61,6 +68,7 @@ function seed(db, esp32BaseUrl) {
     CHANNEL_MAP.forEach(([name, group], channel) => {
       insertSwitch.run(name, board.id, channel, group);
     });
+    for (const a of pcAgents) insertAgent.run(a.name, a.baseUrl);
   });
   tx(esp32BaseUrl);
 }

@@ -84,6 +84,20 @@ test('getSwitchNamesByGroup returns members ordered by channel', () => {
   reg.close();
 });
 
+test('registers PC agents and looks them up', () => {
+  const reg = openRegistry({
+    dbPath: ':memory:', esp32BaseUrl: 'http://e',
+    pcAgents: [{ name: 'desktop', baseUrl: 'http://192.168.0.50:7000' }],
+  });
+  try {
+    assert.deepEqual(reg.getPcAgents().map((a) => a.name), ['desktop']);
+    assert.equal(reg.getPcAgent('desktop').base_url, 'http://192.168.0.50:7000');
+    assert.equal(reg.getPcAgent('nope'), undefined);
+  } finally {
+    reg.close();
+  }
+});
+
 test('logCommand inserts a row (intent serialized as JSON, null stays null)', () => {
   const reg = openTestRegistry();
   reg.logCommand({
