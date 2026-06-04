@@ -365,3 +365,55 @@ test('open_app without a machine uses local openApp', async () => {
   assert.equal(local, true);
   registry.close();
 });
+
+test('media transport op with a machine routes to the pc agent', async () => {
+  const calls = [];
+  const agentClient = { run: async (url, body) => { calls.push({ url, body }); return { ok: true, detail: 'Done.' }; } };
+  const pcAgents = { get: () => ({ name: 'desktop', base_url: 'http://x:7000' }) };
+  const registry = reg();
+  const res = await route({ domain: 'pc', action: 'media', op: 'play_pause', machine: 'desktop' },
+    { board: fakeBoard(), registry, agentClient, pcAgents });
+  assert.equal(res.ok, true);
+  assert.equal(res.speak, 'Done.');
+  assert.deepEqual(calls[0].body, { capability: 'media', action: 'play_pause', params: {} });
+  assert.equal(calls[0].url, 'http://x:7000');
+  registry.close();
+});
+
+test('play_music with a machine is politely refused', async () => {
+  const pcAgents = { get: () => ({ name: 'desktop', base_url: 'http://x' }) };
+  const registry = reg();
+  const res = await route({ domain: 'pc', action: 'media', op: 'play_music', arg: 'x', machine: 'desktop' },
+    { board: fakeBoard(), registry, pcAgents, agentClient: { run: async () => ({ ok: true }) } });
+  assert.equal(res.ok, false);
+  assert.match(res.speak, /can'?t do that on the desktop/i);
+  registry.close();
+});
+
+test('media transport op with a machine but unknown pc is graceful', async () => {
+  const registry = reg();
+  const res = await route({ domain: 'pc', action: 'media', op: 'next', machine: 'desktop' },
+    { board: fakeBoard(), registry, pcAgents: { get: () => null }, agentClient: { run: async () => ({ ok: true }) } });
+  assert.equal(res.ok, false);
+  assert.match(res.speak, /don'?t know a pc called desktop/i);
+  registry.close();
+});
+
+test('media op WITHOUT a machine still uses local media', async () => {
+  let called = false;
+  const media = { next: () => { called = true; return { ok: true, speak: 'Next.' }; } };
+  const registry = reg();
+  const res = await route({ domain: 'pc', action: 'media', op: 'next' }, { board: fakeBoard(), registry, media });
+  assert.equal(called, true);
+  assert.equal(res.ok, true);
+  registry.close();
+});
+
+test('media transport op with a machine but no agent client is graceful', async () => {
+  const registry = reg();
+  const res = await route({ domain: 'pc', action: 'media', op: 'next', machine: 'desktop' },
+    { board: fakeBoard(), registry, pcAgents: { get: () => ({ name: 'desktop', base_url: 'http://x' }) } });
+  assert.equal(res.ok, false);
+  assert.match(res.speak, /not configured/i);
+  registry.close();
+});

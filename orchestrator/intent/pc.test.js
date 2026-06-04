@@ -173,3 +173,29 @@ test('open <app> with no known pc stays local (no machine)', () => {
   assert.deepEqual(matchPcCommand('open steam on the laptop', { pcNames: ['desktop'] }),
     { domain: 'pc', action: 'open_app', target: 'steam on the laptop' });
 });
+
+test('media transport "on the <pc>" carries a machine', () => {
+  assert.deepEqual(matchPcCommand('pause on the desktop', { pcNames: ['desktop'] }),
+    { domain: 'pc', action: 'media', op: 'play_pause', machine: 'desktop' });
+  assert.deepEqual(matchPcCommand('volume up on the desktop', { pcNames: ['desktop'] }),
+    { domain: 'pc', action: 'media', op: 'volume_up', machine: 'desktop' });
+  assert.deepEqual(matchPcCommand('next on the desktop', { pcNames: ['desktop'] }),
+    { domain: 'pc', action: 'media', op: 'next', machine: 'desktop' });
+});
+test('shell "run <cmd> on the <pc>" carries a machine', () => {
+  assert.deepEqual(matchPcCommand('run dir on the desktop', { pcNames: ['desktop'] }),
+    { domain: 'pc', action: 'shell', target: 'dir', machine: 'desktop' });
+});
+test('play_music "on the <pc>" carries a machine', () => {
+  assert.deepEqual(matchPcCommand('play daft punk on the desktop', { pcNames: ['desktop'] }),
+    { domain: 'pc', action: 'media', op: 'play_music', arg: 'daft punk', machine: 'desktop' });
+});
+test('set_volume "on the <pc>" carries a machine', () => {
+  assert.deepEqual(matchPcCommand('set volume to 50 percent on the desktop', { pcNames: ['desktop'] }),
+    { domain: 'pc', action: 'media', op: 'set_volume', arg: 50, machine: 'desktop' });
+});
+test('bare commands have no machine; unknown pc stays in text', () => {
+  assert.deepEqual(matchPcCommand('pause', { pcNames: ['desktop'] }), { domain: 'pc', action: 'media', op: 'play_pause' });
+  assert.deepEqual(matchPcCommand('run dir', { pcNames: ['desktop'] }), { domain: 'pc', action: 'shell', target: 'dir' });
+  assert.deepEqual(matchPcCommand('pause on the laptop', { pcNames: ['desktop'] }), null);
+});
