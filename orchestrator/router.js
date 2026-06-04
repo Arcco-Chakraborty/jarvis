@@ -1,8 +1,16 @@
 // Turns an intent into board actions and a spoken sentence.
 // `board` is an Esp32Switch (set/allOff throw when unreachable; isOn is cached).
 
+const REMOTE_MEDIA_OPS = new Set(['play_pause', 'next', 'prev', 'volume_up', 'volume_down', 'mute']);
+
 function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function remoteSpeak(r, machine) {
+  if (r.ok) return { ok: true, speak: r.detail || `Done on ${machine}.` };
+  const unreachable = !r.detail || r.detail === 'unreachable';
+  return { ok: false, speak: unreachable ? `I couldn't reach the ${machine}.` : r.detail };
 }
 
 async function _route(intent, { board, registry, openApp, media, window: win, browser, music, knowledge, vision, agentClient, pcAgents } = {}) {
@@ -22,15 +30,20 @@ async function _route(intent, { board, registry, openApp, media, window: win, br
         if (!a) return { ok: false, speak: `I don't know a PC called ${intent.machine}.` };
         if (!agentClient) return { ok: false, speak: 'PC agent client not configured.' };
         const r = await agentClient.run(a.base_url, { capability: 'apps', action: 'open', params: { name: intent.target } });
-        if (r.ok) return { ok: true, speak: r.detail || `Done on ${intent.machine}.` };
-        // 'unreachable' = network failure; any other detail = the agent ran but the action failed.
-        const unreachable = !r.detail || r.detail === 'unreachable';
-        return { ok: false, speak: unreachable ? `I couldn't reach the ${intent.machine}.` : r.detail };
+        return remoteSpeak(r, intent.machine);
       }
       if (!openApp) return { ok: false, speak: 'PC capability not configured.' };
       return openApp({ name: intent.target });
     }
     if (intent.action === 'media') {
+      if (intent.machine) {
+        if (!REMOTE_MEDIA_OPS.has(intent.op)) return { ok: false, speak: `I can't do that on the ${intent.machine} yet.` };
+        const a = pcAgents?.get?.(intent.machine);
+        if (!a) return { ok: false, speak: `I don't know a PC called ${intent.machine}.` };
+        if (!agentClient) return { ok: false, speak: 'PC agent client not configured.' };
+        const r = await agentClient.run(a.base_url, { capability: 'media', action: intent.op, params: {} });
+        return remoteSpeak(r, intent.machine);
+      }
       const nc = (w) => ({ ok: false, speak: `${w} capability not configured.` });
       switch (intent.op) {
         case 'play_music':   return music ? music.play({ query: intent.arg }) : nc('Music');
