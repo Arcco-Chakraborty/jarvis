@@ -19,7 +19,7 @@ import { loadRecipesSync, makeShell } from './pc/shell.js';
 import { makeCapture } from './pc/capture.js';
 import { makeVisionAnswer } from './intent/vision-answer.js';
 import { makeVision } from './pc/vision.js';
-import { route } from './router.js';
+import { route, remoteSpeak } from './router.js';
 import { makeKnowledge } from './intent/knowledge.js';
 import * as persona from './intent/persona.js';
 import { createTelemetry } from './telemetry.js';
@@ -74,7 +74,7 @@ export function makePipeline({
   now = Date.now, ttlMs = 60_000,
   splitUtterance = _splitUtterance, parseLocal = _parseLocal,
 }) {
-  let pending = null;  // { command, expiresAt } | null
+  let pending = null;  // { command, machine, expiresAt } | null
 
   function log(text, intent, via, ok, speak) {
     registry?.logCommand?.({ raw_text: text, intent, ok: ok ? 1 : 0, detail: speak });
@@ -111,22 +111,32 @@ export function makePipeline({
     // 1) Confirmation: execute the pending shell command if it's fresh.
     if (intent?.domain === 'confirm' && intent.action === 'yes') {
       if (!fresh()) { pending = null; return log(text, intent, via, false, "There's nothing to confirm."); }
-      const cmd = pending.command; pending = null;
-      const { ok, speak } = shell ? shell.execute(cmd) : { ok: false, speak: 'Shell capability not configured.' };
-      return log(text, intent, via, ok, ok ? `Running ${cmd}.` : speak);
+      const { command, machine } = pending; pending = null;
+      if (machine) {
+        const a = pcAgents?.get?.(machine);
+        if (!a || !agentClient) return log(text, intent, via, false, `I couldn't reach the ${machine}.`);
+        const r = await agentClient.run(a.base_url, { capability: 'shell', action: 'run', params: { command } });
+        const spoken = remoteSpeak(r, machine);
+        return log(text, intent, via, spoken.ok, spoken.speak);
+      }
+      const { ok, speak } = shell ? shell.execute(command) : { ok: false, speak: 'Shell capability not configured.' };
+      return log(text, intent, via, ok, ok ? `Running ${command}.` : speak);
     }
 
     // 2) Shell intent: look up the recipe + stash the pending; do NOT execute yet.
     if (intent?.domain === 'pc' && intent.action === 'shell') {
-      const raw = typeof intent.command === 'string' ? intent.command.trim() : '';
-      const cmd = raw || shell?.lookup?.(intent.target);
+      const literal = typeof intent.command === 'string' ? intent.command.trim() : '';
+      const cmd = intent.machine
+        ? (literal || String(intent.target ?? '').trim())
+        : (literal || shell?.lookup?.(intent.target));
       if (!cmd) {
         pending = null;
         const why = intent.target ? `I don't have a recipe called ${intent.target}.` : "I'm not sure what to run.";
         return log(text, intent, via, false, why);
       }
-      pending = { command: cmd, expiresAt: now() + ttlMs };
-      return log(text, intent, via, true, `Should I run ${cmd}? Say confirm to run.`);
+      pending = { command: cmd, machine: intent.machine ?? null, expiresAt: now() + ttlMs };
+      const where = intent.machine ? ` on the ${intent.machine}` : '';
+      return log(text, intent, via, true, `Should I run ${cmd}${where}? Say confirm to run.`);
     }
 
     // 3) Any other command moves the user on; abandon any pending.

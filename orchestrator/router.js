@@ -7,7 +7,7 @@ function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function remoteSpeak(r, machine) {
+export function remoteSpeak(r, machine) {
   if (r.ok) return { ok: true, speak: r.detail || `Done on ${machine}.` };
   const unreachable = !r.detail || r.detail === 'unreachable';
   return { ok: false, speak: unreachable ? `I couldn't reach the ${machine}.` : r.detail };

@@ -508,3 +508,77 @@ test('pipeline: a vision intent routes to a vision capability', async () => {
   assert.equal(r.speak, 'a mug');
   assert.equal(looked.length, 1);
 });
+
+test('pipeline: a remote shell command is gated then run on the agent', async () => {
+  const ran = [];
+  const agentClient = { run: async (url, body) => { ran.push({ url, body }); return { ok: true, detail: 'Done.' }; } };
+  const pcAgents = { get: () => ({ name: 'desktop', base_url: 'http://x:7000' }) };
+  const p = makePipeline({
+    parse: async (t) => (t === 'confirm'
+      ? { intent: { domain: 'confirm', action: 'yes' }, via: 'rules' }
+      : { intent: { domain: 'pc', action: 'shell', target: 'dir', machine: 'desktop' }, via: 'rules' }),
+    vocab: {}, agentClient, pcAgents, now: () => 1000, ttlMs: 60000,
+  });
+  const r1 = await p.onCommand('run dir on the desktop');
+  assert.match(r1.speak, /should i run dir on the desktop/i);
+  assert.equal(ran.length, 0); // gated — nothing ran yet
+  const r2 = await p.onCommand('confirm');
+  assert.deepEqual(ran[0].body, { capability: 'shell', action: 'run', params: { command: 'dir' } });
+  assert.equal(ran[0].url, 'http://x:7000');
+  assert.match(r2.speak, /done/i);
+});
+
+test('pipeline: a non-confirm after a remote shell prompt abandons it', async () => {
+  const ran = [];
+  const agentClient = { run: async (u, b) => { ran.push({ u, b }); return { ok: true, detail: 'Done.' }; } };
+  const pcAgents = { get: () => ({ name: 'desktop', base_url: 'http://x' }) };
+  let script = { intent: { domain: 'pc', action: 'shell', target: 'dir', machine: 'desktop' }, via: 'rules' };
+  const p = makePipeline({
+    parse: async () => script, vocab: {}, agentClient, pcAgents,
+    route: async () => ({ ok: true, speak: 'ROUTED' }),
+    now: () => 1000, ttlMs: 60000,
+  });
+  await p.onCommand('run dir on the desktop');
+  script = { intent: { domain: 'pc', action: 'open_app', target: 'steam' }, via: 'rules' };
+  await p.onCommand('open steam');
+  // pending was abandoned: a later confirm runs nothing
+  script = { intent: { domain: 'confirm', action: 'yes' }, via: 'rules' };
+  const r = await p.onCommand('confirm');
+  assert.equal(ran.length, 0);
+  assert.match(r.speak, /nothing to confirm/i);
+});
+
+test('pipeline: a reachable remote shell command that fails surfaces its detail', async () => {
+  const agentClient = { run: async () => ({ ok: false, detail: 'Access denied.' }) };
+  const pcAgents = { get: () => ({ name: 'desktop', base_url: 'http://x' }) };
+  let script = { intent: { domain: 'pc', action: 'shell', target: 'dir', machine: 'desktop' }, via: 'rules' };
+  const p = makePipeline({ parse: async () => script, vocab: {}, agentClient, pcAgents, now: () => 1000, ttlMs: 60000 });
+  await p.onCommand('run dir on the desktop');
+  script = { intent: { domain: 'confirm', action: 'yes' }, via: 'rules' };
+  const r = await p.onCommand('confirm');
+  assert.equal(r.ok, false);
+  assert.match(r.speak, /access denied/i);
+});
+
+test('pipeline: an unreachable remote shell command says it could not reach', async () => {
+  const agentClient = { run: async () => ({ ok: false, detail: 'unreachable' }) };
+  const pcAgents = { get: () => ({ name: 'desktop', base_url: 'http://x' }) };
+  let script = { intent: { domain: 'pc', action: 'shell', target: 'dir', machine: 'desktop' }, via: 'rules' };
+  const p = makePipeline({ parse: async () => script, vocab: {}, agentClient, pcAgents, now: () => 1000, ttlMs: 60000 });
+  await p.onCommand('run dir on the desktop');
+  script = { intent: { domain: 'confirm', action: 'yes' }, via: 'rules' };
+  const r = await p.onCommand('confirm');
+  assert.equal(r.ok, false);
+  assert.match(r.speak, /couldn'?t reach the desktop/i);
+});
+
+test('pipeline: confirm with an unknown remote agent is graceful', async () => {
+  const pcAgents = { get: () => null };
+  let script = { intent: { domain: 'pc', action: 'shell', target: 'dir', machine: 'desktop' }, via: 'rules' };
+  const p = makePipeline({ parse: async () => script, vocab: {}, agentClient: { run: async () => ({ ok: true }) }, pcAgents, now: () => 1000, ttlMs: 60000 });
+  await p.onCommand('run dir on the desktop');
+  script = { intent: { domain: 'confirm', action: 'yes' }, via: 'rules' };
+  const r = await p.onCommand('confirm');
+  assert.equal(r.ok, false);
+  assert.match(r.speak, /couldn'?t reach the desktop/i);
+});
