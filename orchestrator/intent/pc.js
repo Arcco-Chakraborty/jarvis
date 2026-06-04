@@ -51,54 +51,57 @@ const WINDOW = [
   [/^close(?:\s+window)?$/,         'close',    null],
 ];
 
-// Strip a trailing "on (the) <known-pc>" from a target -> { target, machine }.
-function splitMachine(target, pcNames) {
+// Strip a trailing "on (the) <known-pc>" -> { text, machine } (machine null if none).
+// Trade-off: the suffix is stripped from the whole text before any routing, so local-only
+// paths (window/search/split) also silently discard the machine — the "on the <pc>" suffix
+// is still removed from their arg.  Accepted trade-off: a search query ending exactly in
+// "on the <pcname>" would be truncated (e.g. "search on the desktop" with pcNames:['desktop']).
+function stripMachine(text, pcNames) {
   for (const name of pcNames) {
     const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const m = String(target).match(new RegExp(`^(.+?)\\s+on\\s+(?:the\\s+)?${esc}$`));
-    if (m) return { target: m[1].trim(), machine: name };
+    const m = String(text).match(new RegExp(`^(.+?)\\s+on\\s+(?:the\\s+)?${esc}$`));
+    if (m) return { text: m[1].trim(), machine: name };
   }
-  return { target, machine: null };
+  return { text, machine: null };
 }
 
 export function matchPcCommand(text, vocab = {}) {
-  const norm = normalize(text);
-  if (!norm) return null;
+  const raw = normalize(text);
+  if (!raw) return null;
+  const { text: norm, machine } = stripMachine(raw, vocab.pcNames ?? []);
+  const withMachine = (intent) => (machine ? { ...intent, machine } : intent);
 
   // open|launch|start <app>
   const open = norm.match(/^(?:open|launch|start)\s+(.+)$/);
   if (open) {
     const target = open[1].replace(/^the\s+/, '').trim();
-    if (target) {
-      const { target: app, machine } = splitMachine(target, vocab.pcNames ?? []);
-      return { domain: 'pc', action: 'open_app', target: app, ...(machine ? { machine } : {}) };
-    }
+    if (target) return withMachine({ domain: 'pc', action: 'open_app', target });
   }
 
   // media
   for (const [re, op] of MEDIA_FIXED) {
-    if (re.test(norm)) return { domain: 'pc', action: 'media', op };
+    if (re.test(norm)) return withMachine({ domain: 'pc', action: 'media', op });
   }
 
   // play / put on / play me / i want to hear <query> -> music.play
   // (the bare "play"/"play music"/"pause" cases are caught by MEDIA_FIXED above as play_pause)
   const playQ = norm.match(/^(?:play(?:\s+me)?|put\s+on|i\s+want\s+to\s+hear)\s+(?!music$)(.+)$/);
   if (playQ) {
-    return { domain: 'pc', action: 'media', op: 'play_music', arg: playQ[1].trim() };
+    return withMachine({ domain: 'pc', action: 'media', op: 'play_music', arg: playQ[1].trim() });
   }
 
   const sv = norm.match(SET_VOL);
   if (sv) {
     const n = parseSpokenNumber(sv[1]);
-    if (n != null) return { domain: 'pc', action: 'media', op: 'set_volume', arg: n };
+    if (n != null) return withMachine({ domain: 'pc', action: 'media', op: 'set_volume', arg: n });
   }
 
-  // what's open -> list windows
+  // what's open -> list windows (local only — no machine)
   if (/^(?:what'?s open|what is open|what windows are open|what windows do i have(?: open)?|list (?:my )?windows)$/.test(norm)) {
     return { domain: 'pc', action: 'window', op: 'list' };
   }
 
-  // window
+  // window (local only — no machine)
   for (const [re, op, argFrom] of WINDOW) {
     const m = norm.match(re);
     if (m) {
@@ -108,7 +111,7 @@ export function matchPcCommand(text, vocab = {}) {
     }
   }
 
-  // search / look up <topic> -> browser.search
+  // search / look up <topic> -> browser.search (local only — no machine)
   const sQ = norm.match(/^(?:search(?:\s+(?:about|for))?|look\s+up)\s+(.+)$/);
   if (sQ) {
     const topic = sQ[1].trim();
@@ -118,7 +121,7 @@ export function matchPcCommand(text, vocab = {}) {
     }
   }
 
-  // split <a> with <b> -> window.split (strip a leading "the " from each)
+  // split <a> with <b> -> window.split (local only — no machine)
   const sp = norm.match(/^split\s+(.+?)\s+with\s+(.+)$/);
   if (sp) {
     const a = sp[1].replace(/^the\s+/, '').trim();
@@ -129,7 +132,7 @@ export function matchPcCommand(text, vocab = {}) {
   // shell recipe — "run <recipe>"
   const run = norm.match(/^run\s+(.+)$/);
   if (run && run[1].trim()) {
-    return { domain: 'pc', action: 'shell', target: run[1].trim() };
+    return withMachine({ domain: 'pc', action: 'shell', target: run[1].trim() });
   }
 
   return null;
