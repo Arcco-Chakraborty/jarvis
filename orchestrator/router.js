@@ -1,7 +1,7 @@
 // Turns an intent into board actions and a spoken sentence.
 // `board` is an Esp32Switch (set/allOff throw when unreachable; isOn is cached).
 
-const REMOTE_MEDIA_OPS = new Set(['play_pause', 'next', 'prev', 'volume_up', 'volume_down', 'mute']);
+const REMOTE_MEDIA_OPS = new Set(['play_pause', 'next', 'prev', 'volume_up', 'volume_down', 'mute', 'set_volume']);
 
 function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -45,7 +45,8 @@ async function _route(intent, { board, registry, openApp, media, window: win, br
         const a = pcAgents?.get?.(intent.machine);
         if (!a) return { ok: false, speak: `I don't know a PC called ${intent.machine}.` };
         if (!agentClient) return { ok: false, speak: 'PC agent client not configured.' };
-        const r = await agentClient.run(a.base_url, { capability: 'media', action: intent.op, params: {} });
+        const params = intent.op === 'set_volume' ? { level: intent.arg } : {};
+        const r = await agentClient.run(a.base_url, { capability: 'media', action: intent.op, params });
         return remoteSpeak(r, intent.machine);
       }
       const nc = (w) => ({ ok: false, speak: `${w} capability not configured.` });
