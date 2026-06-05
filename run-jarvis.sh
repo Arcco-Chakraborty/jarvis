@@ -25,6 +25,6 @@ else
   echo "WARNING: orchestrator did not come up; check /tmp/jarvis-orch.log"
 fi
 
-export VOICE_WAKE_THRESHOLD="${VOICE_WAKE_THRESHOLD:-0.3}"
+export VOICE_WAKE_THRESHOLD="${VOICE_WAKE_THRESHOLD:-0.5}"
 echo "voice wake threshold = $VOICE_WAKE_THRESHOLD ; say 'jarvis', then a command. Ctrl-C to stop."
 exec voice-service/run-full.sh

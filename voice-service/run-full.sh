@@ -12,8 +12,12 @@ export WHISPER_COMPUTE_TYPE="${WHISPER_COMPUTE_TYPE:-int8}"
 export VOICE_TTS_BACKEND="${VOICE_TTS_BACKEND:-piper}"
 export PIPER_COMMAND="${PIPER_COMMAND:-.venv/bin/piper}"
 export PIPER_VOICE="${PIPER_VOICE:-voice-service/models/en_GB-alan-medium.onnx}"
-export AUDIO_PLAYER="${AUDIO_PLAYER:-aplay}"
-export VOICE_WAKE_THRESHOLD="${VOICE_WAKE_THRESHOLD:-0.35}"
+# pw-play is PipeWire-native and resamples/mixes cleanly; raw aplay distorts
+# short 22kHz clips through the ALSA bridge while other streams are active.
+export AUDIO_PLAYER="${AUDIO_PLAYER:-pw-play}"
+# 0.5 cuts openWakeWord false-triggers from ambient audio (music/video/TTS);
+# 0.3-0.35 was too sensitive on this machine.
+export VOICE_WAKE_THRESHOLD="${VOICE_WAKE_THRESHOLD:-0.5}"
 export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 
 # CTranslate2 (faster-whisper GPU) needs the pip-installed CUDA-12 runtime libs on the

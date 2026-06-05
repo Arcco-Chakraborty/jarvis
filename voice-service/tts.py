@@ -46,9 +46,11 @@ class PiperTTS:
                 input=text.encode("utf-8"),
                 check=True,
             )
-            player = [self.audio_player, "-q", str(path)]
+            # No "-q": keep the command player-agnostic so AUDIO_PLAYER can be
+            # pw-play (PipeWire-native, cleaner) or aplay. -D is aplay's device flag.
+            player = [self.audio_player, str(path)]
             if self.output_device:
-                player = [self.audio_player, "-q", "-D", self.output_device, str(path)]
+                player = [self.audio_player, "-D", self.output_device, str(path)]
             self.runner(player, check=True)
         finally:
             path.unlink(missing_ok=True)

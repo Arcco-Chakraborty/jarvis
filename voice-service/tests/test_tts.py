@@ -33,6 +33,12 @@ class PiperTTSTest(unittest.TestCase):
         self.assertEqual(piper_cmd[piper_cmd.index("--length-scale") + 1], "0.8")
         self.assertIn("--sentence-silence", piper_cmd)
         self.assertEqual(piper_cmd[piper_cmd.index("--sentence-silence") + 1], "0.15")
+        # Player command must stay player-agnostic (no aplay-only "-q") so
+        # AUDIO_PLAYER can be pw-play.
+        player_cmd = calls[1]
+        self.assertNotIn("-q", player_cmd)
+        self.assertEqual(player_cmd[0], "aplay")
+        self.assertTrue(player_cmd[-1].endswith(".wav"))
 
     def test_build_tts_threads_speed_from_config(self):
         cfg = VoiceConfig(tts_backend="piper", piper_voice="m.onnx", piper_length_scale=0.8)
