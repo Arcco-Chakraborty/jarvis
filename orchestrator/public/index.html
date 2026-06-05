@@ -294,6 +294,7 @@
   body.speak .state-word { color: #fff5e0; text-shadow: 0 0 24px var(--amber), 0 0 60px rgba(255,178,62,0.6); }
   .state-sub { margin-top: 6px; font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.42em; color: var(--muted); text-transform: uppercase; }
   .transcript { margin: 14px auto 0; min-height: 1.6em; font-family: var(--ui); font-weight: 600; font-size: 1.05rem; color: var(--cyan-soft); letter-spacing: 0.06em; text-shadow: 0 0 14px rgba(79,230,255,0.4); max-width: 540px; }
+  .transcript.reply { color: var(--amber-soft); text-shadow: 0 0 16px rgba(255,178,62,0.5); }
   .transcript:empty::before { content: "awaiting input…"; color: var(--muted); text-shadow: none; font-family: var(--mono); font-size: 0.85rem; letter-spacing: 0.3em; }
 
   /* footer */
@@ -507,6 +508,8 @@ async function jpost(url, body) {
 
 let lastVoice = { status: "idle", wakeScore: 0, threshold: 0.3, lastTranscript: "", ageMs: null };
 let lastCmd = null;
+let replyActive = false;   // true while JARVIS's reply caption is being shown
+let lastReplyTs = 0;       // ts of the most recently evaluated /log command (shown or skipped)
 let lastState = {};
 
 function setDot(id, klass) { const el = document.getElementById(id); if (el) el.className = "dot " + klass; }
@@ -598,7 +601,14 @@ async function pollVoice() {
     $("#wfill").style.width = clamp(lastVoice.wakeScore, 0, 1) * 100 + "%";
     $("#wnum").textContent = lastVoice.wakeScore.toFixed(2);
     $("#wthr-v").textContent = lastVoice.threshold.toFixed(2);
-    if (Date.now() > flashUntil) {
+    // A fresh wake cycle ends any reply we were holding, so the new turn's
+    // input can show. (awake/recording only occur at the start of a turn.)
+    if (replyActive && (lastVoice.status === "awake" || lastVoice.status === "recording")) {
+      replyActive = false;
+      $("#transcript").classList.remove("reply");
+    }
+    // While a reply is held, don't overwrite it with the input transcript.
+    if (!replyActive && Date.now() > flashUntil) {
       $("#transcript").textContent = lastVoice.lastTranscript ? "“" + lastVoice.lastTranscript + "”" : "";
     }
   } catch (_) {
@@ -650,11 +660,27 @@ async function pollLog() {
     const j = await jget("/log");
     if (j && Array.isArray(j.commands) && j.commands.length) lastCmd = j.commands[0];
     else lastCmd = null;
+    // Surface JARVIS's reply on the orb. Only for a genuinely new, fresh
+    // command — skip stale entries loaded on page open so we don't flash an
+    // old reply. lastReplyTs is bumped either way so we evaluate each once.
+    if (lastCmd && lastCmd.ts !== lastReplyTs) {
+      lastReplyTs = lastCmd.ts;
+      if (lastCmd.speak && (Date.now() - lastCmd.ts) < 3500) {
+        replyActive = true;
+        $("#transcript").textContent = "▸ " + lastCmd.speak;
+        $("#transcript").classList.add("reply");
+      }
+    }
   } catch (_) {}
 }
 
 let flashUntil = 0;
-function flashTranscript(txt) { $("#transcript").textContent = txt; flashUntil = Date.now() + 4000; }
+function flashTranscript(txt) {
+  replyActive = false;                          // release any held voice reply
+  $("#transcript").classList.remove("reply");   // drop amber styling
+  $("#transcript").textContent = txt;
+  flashUntil = Date.now() + 4000;
+}
 
 /* quick switch buttons */
 async function quickSw(target, action) {
