@@ -69,6 +69,33 @@ test('seeding is idempotent across reopens (1 device, 8 switches)', () => {
   }
 });
 
+test('seed reconciles base_url from config on reopen (config is source of truth)', () => {
+  const dbPath = join(tmpdir(), `jarvis-test-reconcile-${process.pid}-${Date.now()}.db`);
+  try {
+    // First boot: original config.
+    openRegistry({
+      dbPath, esp32BaseUrl: 'http://old-board',
+      pcAgents: [{ name: 'laptop', baseUrl: 'http://old:7000' }],
+    }).close();
+    // Second boot: config changed (e.g., .env was edited). The DB must follow.
+    const reg = openRegistry({
+      dbPath, esp32BaseUrl: 'http://new-board',
+      pcAgents: [{ name: 'laptop', baseUrl: 'http://new:7000' }],
+    });
+    assert.equal(reg.getPcAgent('laptop').base_url, 'http://new:7000');
+    assert.equal(
+      reg._db.prepare("SELECT base_url FROM devices WHERE name='smartswitch'").get().base_url,
+      'http://new-board',
+    );
+    // No duplicate rows — upsert, not a second insert.
+    assert.equal(reg._db.prepare("SELECT COUNT(*) AS n FROM devices WHERE name='laptop'").get().n, 1);
+    reg.close();
+  } finally {
+    rmSync(dbPath, { force: true });
+    rmSync(`${dbPath}-journal`, { force: true });
+  }
+});
+
 test('getGroupNames returns the distinct groups', () => {
   const reg = openTestRegistry();
   assert.deepEqual(reg.getGroupNames(), ['fans', 'lights', 'other']);

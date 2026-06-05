@@ -53,14 +53,19 @@ export function openRegistry({ dbPath = config.dbPath, esp32BaseUrl = config.esp
 }
 
 function seed(db, esp32BaseUrl, pcAgents = []) {
+  // Devices upsert base_url so config (.env) stays the source of truth across
+  // reboots — a plain INSERT OR IGNORE would leave a stale URL in the DB after
+  // an .env edit. The WHERE guard avoids clobbering a good URL with an empty one.
   const insertDevice = db.prepare(
-    "INSERT OR IGNORE INTO devices (name, type, base_url) VALUES ('smartswitch', 'esp32_switch', ?)",
+    "INSERT INTO devices (name, type, base_url) VALUES ('smartswitch', 'esp32_switch', ?) " +
+      "ON CONFLICT(name) DO UPDATE SET base_url = excluded.base_url WHERE excluded.base_url <> ''",
   );
   const insertSwitch = db.prepare(
     'INSERT OR IGNORE INTO switches (name, device_id, channel, group_name) VALUES (?, ?, ?, ?)',
   );
   const insertAgent = db.prepare(
-    "INSERT OR IGNORE INTO devices (name, type, base_url) VALUES (?, 'pc_agent', ?)",
+    "INSERT INTO devices (name, type, base_url) VALUES (?, 'pc_agent', ?) " +
+      "ON CONFLICT(name) DO UPDATE SET base_url = excluded.base_url WHERE excluded.base_url <> ''",
   );
   const tx = db.transaction((baseUrl) => {
     insertDevice.run(baseUrl ?? '');
