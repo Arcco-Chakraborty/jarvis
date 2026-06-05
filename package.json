@@ -1,9 +1,15 @@
 {
   "name": "jarvis-orchestrator",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "JARVIS home voice orchestrator",
+  "author": "Arcco Chakraborty",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Arcco-Chakraborty/jarvis.git"
+  },
   "scripts": {
     "start": "node --env-file=.env orchestrator/server.js",
     "test": "node --test"

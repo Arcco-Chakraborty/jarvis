@@ -1,7 +1,10 @@
 {
   "name": "jarvis-pc-agent",
   "version": "1.0.0",
+  "description": "JARVIS PC agent: runs apps/media/shell actions on a controllable computer",
   "type": "module",
   "private": true,
+  "author": "Arcco Chakraborty",
+  "license": "MIT",
   "scripts": { "start": "node index.js", "test": "node --test" }
 }

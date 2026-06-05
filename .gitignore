@@ -8,6 +8,9 @@ voice-service/models/
 # secrets & local config
 .env
 
+# personal / local-only notes (not part of the shipped project)
+youtube-video.md
+
 # sqlite database (runtime-generated)
 *.db
 *.db-journal
