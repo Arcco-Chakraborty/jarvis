@@ -23,6 +23,8 @@ class VoiceConfig:
     piper_command: str = "piper"
     piper_voice: str = ""
     piper_output_device: str = ""
+    piper_length_scale: float = 0.8
+    piper_sentence_silence: float = 0.15
     audio_player: str = "aplay"
     vosk_model_path: str = "voice-service/models/vosk-model-en-us-0.22-lgraph"
     request_timeout_s: float = 30.0
@@ -53,6 +55,8 @@ def load_config(env=os.environ):
         piper_command=env.get("PIPER_COMMAND", "piper"),
         piper_voice=env.get("PIPER_VOICE", ""),
         piper_output_device=env.get("PIPER_OUTPUT_DEVICE", ""),
+        piper_length_scale=float(env.get("PIPER_LENGTH_SCALE", "0.8")),
+        piper_sentence_silence=float(env.get("PIPER_SENTENCE_SILENCE", "0.15")),
         audio_player=env.get("AUDIO_PLAYER", "aplay"),
         vosk_model_path=env.get("VOSK_MODEL_PATH", "voice-service/models/vosk-model-en-us-0.22-lgraph"),
         request_timeout_s=float(env.get("VOICE_REQUEST_TIMEOUT_S", "30")),
