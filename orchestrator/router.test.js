@@ -435,6 +435,47 @@ test('media op WITHOUT a machine still uses local media', async () => {
   registry.close();
 });
 
+test('remote type dispatches text to the agent type capability', async () => {
+  const calls = [];
+  const agentClient = { run: async (b, p) => { calls.push(p); return { ok: true, detail: 'Typed.' }; } };
+  const pcAgents = { get: () => ({ name: 'laptop', base_url: 'http://x:7000' }) };
+  const r = await route({ domain: 'pc', action: 'type', text: 'hello world', machine: 'laptop' }, { agentClient, pcAgents });
+  assert.equal(r.ok, true);
+  assert.deepEqual(calls[0], { capability: 'type', action: 'send', params: { text: 'hello world' } });
+});
+
+test('type without a machine is rejected (remote-only)', async () => {
+  const r = await route({ domain: 'pc', action: 'type', text: 'hello' }, {});
+  assert.equal(r.ok, false);
+  assert.match(r.speak, /on (a|the)/i);
+});
+
+test('remote open_app routes a URL-like target to the browser capability', async () => {
+  const calls = [];
+  const agentClient = { run: async (base, payload) => { calls.push(payload); return { ok: true, detail: 'Opening https://youtube.com.' }; } };
+  const pcAgents = { get: () => ({ name: 'laptop', base_url: 'http://x:7000' }) };
+  const r = await route({ domain: 'pc', action: 'open_app', target: 'youtube.com', machine: 'laptop' }, { agentClient, pcAgents });
+  assert.equal(r.ok, true);
+  assert.deepEqual(calls[0], { capability: 'browser', action: 'open', params: { url: 'youtube.com' } });
+
+  const r2calls = [];
+  const ac2 = { run: async (b, p) => { r2calls.push(p); return { ok: true, detail: 'Opening notepad.' }; } };
+  await route({ domain: 'pc', action: 'open_app', target: 'notepad', machine: 'laptop' }, { agentClient: ac2, pcAgents });
+  assert.deepEqual(r2calls[0], { capability: 'apps', action: 'open', params: { name: 'notepad' } });
+});
+
+test('remote set_volume dispatches level to the agent media capability', async () => {
+  const calls = [];
+  const agentClient = { run: async (base, payload) => { calls.push({ base, payload }); return { ok: true, detail: 'Volume set to 30.' }; } };
+  const pcAgents = { get: (n) => (n === 'laptop' ? { name: 'laptop', base_url: 'http://x:7000' } : undefined) };
+  const r = await route(
+    { domain: 'pc', action: 'media', op: 'set_volume', arg: 30, machine: 'laptop' },
+    { agentClient, pcAgents },
+  );
+  assert.equal(r.ok, true);
+  assert.deepEqual(calls[0].payload, { capability: 'media', action: 'set_volume', params: { level: 30 } });
+});
+
 test('media transport op with a machine but no agent client is graceful', async () => {
   const registry = reg();
   const res = await route({ domain: 'pc', action: 'media', op: 'next', machine: 'desktop' },

@@ -20,8 +20,27 @@ function press(spawn, vk) {
   }
 }
 
+function setVolume(spawn, level) {
+  const lvl = Math.max(0, Math.min(100, Math.round(Number(level) || 0)));
+  const ups = Math.round(lvl / 2); // each VK_VOLUME_UP ≈ 2%
+  const script =
+    "$s='[DllImport(\"user32.dll\")]public static extern void keybd_event(byte b,byte s,uint f,IntPtr e);';" +
+    '$k=Add-Type -MemberDefinition $s -Name K -Namespace W -PassThru;' +
+    'function vk($c){$k::keybd_event($c,0,0,[IntPtr]::Zero);$k::keybd_event($c,0,2,[IntPtr]::Zero)}' +
+    '1..50 | % { vk 0xAE };' +
+    (ups > 0 ? `1..${ups} | % { vk 0xAF };` : '');
+  try {
+    const p = spawn('powershell', ['-NoProfile', '-Command', script], OPTS);
+    p?.unref?.();
+    return { ok: true, detail: `Volume set to ${lvl}.` };
+  } catch {
+    return { ok: false, detail: "I couldn't set the volume." };
+  }
+}
+
 export function makeMedia({ spawn = _spawn } = {}) {
   const actions = {};
   for (const [name, vk] of Object.entries(VK)) actions[name] = () => press(spawn, vk);
+  actions.set_volume = ({ level } = {}) => setVolume(spawn, level);
   return { name: 'media', actions };
 }

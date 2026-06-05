@@ -129,6 +129,12 @@ export function matchPcCommand(text, vocab = {}) {
     if (a && b) return { domain: 'pc', action: 'window', op: 'split', a, b };
   }
 
+  // type <text> -> send keystrokes (remote-only; router rejects without a machine)
+  const typ = norm.match(/^type\s+(.+)$/);
+  if (typ && typ[1].trim()) {
+    return withMachine({ domain: 'pc', action: 'type', text: typ[1].trim() });
+  }
+
   // shell recipe — "run <recipe>"
   const run = norm.match(/^run\s+(.+)$/);
   if (run && run[1].trim()) {

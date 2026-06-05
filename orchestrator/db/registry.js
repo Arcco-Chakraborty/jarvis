@@ -74,6 +74,15 @@ function seed(db, esp32BaseUrl, pcAgents = []) {
       insertSwitch.run(name, board.id, channel, group);
     });
     for (const a of pcAgents) insertAgent.run(a.name, a.baseUrl);
+    // Config is the source of truth: drop pc_agent rows no longer configured.
+    const names = pcAgents.map((a) => a.name);
+    if (names.length) {
+      db.prepare(
+        `DELETE FROM devices WHERE type='pc_agent' AND name NOT IN (${names.map(() => '?').join(',')})`,
+      ).run(...names);
+    } else {
+      db.prepare("DELETE FROM devices WHERE type='pc_agent'").run();
+    }
   });
   tx(esp32BaseUrl);
 }

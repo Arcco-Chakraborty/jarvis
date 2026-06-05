@@ -33,3 +33,33 @@ test('a spawn error is graceful', () => {
   const res = makeMedia({ spawn: () => { throw new Error('x'); } }).actions.play_pause();
   assert.equal(res.ok, false);
 });
+
+test('set_volume floors then steps up ~2%/step via powershell', () => {
+  const r = rec();
+  const res = makeMedia({ spawn: r.spawn }).actions.set_volume({ level: 30 });
+  assert.equal(res.ok, true);
+  assert.equal(r.calls[0].bin, 'powershell');
+  const script = r.calls[0].args.join(' ');
+  assert.match(script, /keybd_event/);
+  assert.ok(script.includes('0xAE'), 'sends volume-down');
+  assert.ok(script.includes('0xAF'), 'sends volume-up');
+  assert.ok(script.includes('1..50'), 'floors to zero with 50 down-steps');
+  assert.ok(script.includes('1..15'), 'steps up round(30/2)=15');
+});
+
+test('set_volume clamps out-of-range levels', () => {
+  const r = rec();
+  makeMedia({ spawn: r.spawn }).actions.set_volume({ level: 250 });
+  const script = r.calls[0].args.join(' ');
+  assert.ok(script.includes('1..50'), 'clamps to 100 -> 50 up-steps');
+});
+
+test('set_volume level 0 floors with no up-steps (avoids PowerShell 1..0 descending range)', () => {
+  const r = rec();
+  const res = makeMedia({ spawn: r.spawn }).actions.set_volume({ level: 0 });
+  assert.equal(res.ok, true);
+  const script = r.calls[0].args.join(' ');
+  assert.ok(script.includes('1..50'), 'still floors with 50 down-steps');
+  assert.ok(!script.includes('0xAF'), 'no volume-up steps at level 0');
+  assert.ok(!/1\.\.0/.test(script), 'never emits the 1..0 descending range');
+});

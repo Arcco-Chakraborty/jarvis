@@ -1,7 +1,12 @@
 // Turns an intent into board actions and a spoken sentence.
 // `board` is an Esp32Switch (set/allOff throw when unreachable; isOn is cached).
 
-const REMOTE_MEDIA_OPS = new Set(['play_pause', 'next', 'prev', 'volume_up', 'volume_down', 'mute']);
+const REMOTE_MEDIA_OPS = new Set(['play_pause', 'next', 'prev', 'volume_up', 'volume_down', 'mute', 'set_volume']);
+
+// A target is treated as a website if it has a dot with no spaces, or an explicit scheme.
+function looksLikeUrl(s) {
+  return /^https?:\/\//i.test(s) || (/\./.test(s) && !/\s/.test(s));
+}
 
 function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -33,7 +38,9 @@ async function _route(intent, { board, registry, openApp, media, window: win, br
         const a = pcAgents?.get?.(intent.machine);
         if (!a) return { ok: false, speak: `I don't know a PC called ${intent.machine}.` };
         if (!agentClient) return { ok: false, speak: 'PC agent client not configured.' };
-        const r = await agentClient.run(a.base_url, { capability: 'apps', action: 'open', params: { name: intent.target } });
+        const r = looksLikeUrl(intent.target)
+          ? await agentClient.run(a.base_url, { capability: 'browser', action: 'open', params: { url: intent.target } })
+          : await agentClient.run(a.base_url, { capability: 'apps', action: 'open', params: { name: intent.target } });
         return remoteSpeak(r, intent.machine);
       }
       if (!openApp) return { ok: false, speak: 'PC capability not configured.' };
@@ -45,7 +52,8 @@ async function _route(intent, { board, registry, openApp, media, window: win, br
         const a = pcAgents?.get?.(intent.machine);
         if (!a) return { ok: false, speak: `I don't know a PC called ${intent.machine}.` };
         if (!agentClient) return { ok: false, speak: 'PC agent client not configured.' };
-        const r = await agentClient.run(a.base_url, { capability: 'media', action: intent.op, params: {} });
+        const params = intent.op === 'set_volume' ? { level: intent.arg } : {};
+        const r = await agentClient.run(a.base_url, { capability: 'media', action: intent.op, params });
         return remoteSpeak(r, intent.machine);
       }
       const nc = (w) => ({ ok: false, speak: `${w} capability not configured.` });
@@ -61,6 +69,14 @@ async function _route(intent, { board, registry, openApp, media, window: win, br
         case 'set_volume':   return media ? media.setVolume(intent.arg) : nc('Media');
         default:             return { ok: false, speak: "I don't know how to do that." };
       }
+    }
+    if (intent.action === 'type') {
+      if (!intent.machine) return { ok: false, speak: 'I can only type on a PC — say "type … on the laptop".' };
+      const a = pcAgents?.get?.(intent.machine);
+      if (!a) return { ok: false, speak: `I don't know a PC called ${intent.machine}.` };
+      if (!agentClient) return { ok: false, speak: 'PC agent client not configured.' };
+      const r = await agentClient.run(a.base_url, { capability: 'type', action: 'send', params: { text: intent.text } });
+      return remoteSpeak(r, intent.machine);
     }
     if (intent.action === 'window') {
       if (!win) return { ok: false, speak: 'Window capability not configured.' };

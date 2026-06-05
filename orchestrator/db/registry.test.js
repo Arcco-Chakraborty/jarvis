@@ -125,6 +125,20 @@ test('registers PC agents and looks them up', () => {
   }
 });
 
+test('seed removes pc_agent rows not present in config (rename, not duplicate)', () => {
+  const dbPath = join(tmpdir(), `jarvis-test-rename-${process.pid}-${Date.now()}.db`);
+  try {
+    openRegistry({ dbPath, esp32BaseUrl: 'http://b', pcAgents: [{ name: 'desktop', baseUrl: 'http://x:7000' }] }).close();
+    const reg = openRegistry({ dbPath, esp32BaseUrl: 'http://b', pcAgents: [{ name: 'laptop', baseUrl: 'http://x:7000' }] });
+    assert.deepEqual(reg.getPcAgents().map((a) => a.name), ['laptop']);
+    assert.equal(reg._db.prepare("SELECT COUNT(*) AS n FROM devices WHERE type='pc_agent'").get().n, 1);
+    reg.close();
+  } finally {
+    rmSync(dbPath, { force: true });
+    rmSync(`${dbPath}-journal`, { force: true });
+  }
+});
+
 test('logCommand inserts a row (intent serialized as JSON, null stays null)', () => {
   const reg = openTestRegistry();
   reg.logCommand({
