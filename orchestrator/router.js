@@ -20,7 +20,11 @@ async function _route(intent, { board, registry, openApp, media, window: win, br
   }
   if (intent.domain === 'vision') {
     if (!vision) return { ok: false, speak: 'Vision capability not configured.' };
-    return vision.look({ source: intent.source, query: intent.query });
+    const r = await vision.look({ source: intent.source, query: intent.query });
+    // Implicit (deictic/help) requests should never block on a flaky camera —
+    // fall back to a normal spoken answer instead of a camera error.
+    if (!r.ok && intent.implicit && knowledge) return knowledge.answer(intent.query);
+    return r;
   }
   // PC domain: each sub-action goes to its injected capability.
   if (intent.domain === 'pc') {

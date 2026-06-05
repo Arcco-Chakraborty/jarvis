@@ -309,6 +309,32 @@ test('vision with no capability configured is graceful', async () => {
   registry.close();
 });
 
+test('implicit vision falls back to knowledge when capture fails', async () => {
+  const vision = { look: async () => ({ ok: false, speak: "I couldn't reach your phone's camera." }) };
+  const knowledge = { answer: async (q) => ({ ok: true, speak: `Knowledge: ${q}` }) };
+  const r = await route(
+    { domain: 'vision', source: 'phone', query: 'how do i connect these', implicit: true },
+    { vision, knowledge },
+  );
+  assert.equal(r.ok, true);
+  assert.equal(r.speak, 'Knowledge: how do i connect these');
+});
+
+test('implicit vision returns the description when capture succeeds', async () => {
+  const vision = { look: async () => ({ ok: true, speak: 'A tangle of cables.' }) };
+  const knowledge = { answer: async () => { throw new Error('should not be called'); } };
+  const r = await route({ domain: 'vision', source: 'phone', query: 'q', implicit: true }, { vision, knowledge });
+  assert.equal(r.speak, 'A tangle of cables.');
+});
+
+test('explicit vision keeps the camera error (no knowledge fallback)', async () => {
+  const vision = { look: async () => ({ ok: false, speak: "I couldn't reach your phone's camera." }) };
+  const knowledge = { answer: async () => { throw new Error('should not be called'); } };
+  const r = await route({ domain: 'vision', source: 'phone', query: 'q' }, { vision, knowledge });
+  assert.equal(r.ok, false);
+  assert.match(r.speak, /camera/i);
+});
+
 test('window list -> win.list()', async () => {
   const win = { list: async () => ({ ok: true, speak: 'You have Chrome open, sir.' }) };
   const registry = reg();
