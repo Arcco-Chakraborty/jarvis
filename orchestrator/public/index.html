@@ -509,7 +509,7 @@ async function jpost(url, body) {
 let lastVoice = { status: "idle", wakeScore: 0, threshold: 0.3, lastTranscript: "", ageMs: null };
 let lastCmd = null;
 let replyActive = false;   // true while JARVIS's reply caption is being shown
-let lastReplyTs = 0;       // ts of the last /log command we've already handled
+let lastReplyTs = 0;       // ts of the most recently evaluated /log command (shown or skipped)
 let lastState = {};
 
 function setDot(id, klass) { const el = document.getElementById(id); if (el) el.className = "dot " + klass; }
@@ -675,7 +675,12 @@ async function pollLog() {
 }
 
 let flashUntil = 0;
-function flashTranscript(txt) { $("#transcript").textContent = txt; flashUntil = Date.now() + 4000; }
+function flashTranscript(txt) {
+  replyActive = false;                          // release any held voice reply
+  $("#transcript").classList.remove("reply");   // drop amber styling
+  $("#transcript").textContent = txt;
+  flashUntil = Date.now() + 4000;
+}
 
 /* quick switch buttons */
 async function quickSw(target, action) {
