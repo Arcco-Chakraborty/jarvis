@@ -435,6 +435,20 @@ test('media op WITHOUT a machine still uses local media', async () => {
   registry.close();
 });
 
+test('remote open_app routes a URL-like target to the browser capability', async () => {
+  const calls = [];
+  const agentClient = { run: async (base, payload) => { calls.push(payload); return { ok: true, detail: 'Opening https://youtube.com.' }; } };
+  const pcAgents = { get: () => ({ name: 'laptop', base_url: 'http://x:7000' }) };
+  const r = await route({ domain: 'pc', action: 'open_app', target: 'youtube.com', machine: 'laptop' }, { agentClient, pcAgents });
+  assert.equal(r.ok, true);
+  assert.deepEqual(calls[0], { capability: 'browser', action: 'open', params: { url: 'youtube.com' } });
+
+  const r2calls = [];
+  const ac2 = { run: async (b, p) => { r2calls.push(p); return { ok: true, detail: 'Opening notepad.' }; } };
+  await route({ domain: 'pc', action: 'open_app', target: 'notepad', machine: 'laptop' }, { agentClient: ac2, pcAgents });
+  assert.deepEqual(r2calls[0], { capability: 'apps', action: 'open', params: { name: 'notepad' } });
+});
+
 test('remote set_volume dispatches level to the agent media capability', async () => {
   const calls = [];
   const agentClient = { run: async (base, payload) => { calls.push({ base, payload }); return { ok: true, detail: 'Volume set to 30.' }; } };
