@@ -115,6 +115,17 @@ test('"stop music" / "stop the music" / "stop playing" route to stop_music', () 
   assert.deepEqual(matchPcCommand('stop playing'),    { domain:'pc', action:'media', op:'stop_music' });
 });
 
+test('type command -> type intent, machine-aware', () => {
+  assert.deepEqual(
+    matchPcCommand('type hello world', {}),
+    { domain: 'pc', action: 'type', text: 'hello world' },
+  );
+  assert.deepEqual(
+    matchPcCommand('type hello on the laptop', { pcNames: ['laptop'] }),
+    { domain: 'pc', action: 'type', text: 'hello', machine: 'laptop' },
+  );
+});
+
 test('bare "stop" is not a pc command (it is the voice sleep word)', () => {
   assert.equal(matchPcCommand('stop'), null);
 });
