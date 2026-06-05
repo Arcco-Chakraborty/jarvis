@@ -1,6 +1,6 @@
 import { matchSwitchCommand } from './rules.js';
 import { matchPcCommand } from './pc.js';
-import { matchVision } from './vision.js';
+import { matchVision, matchImplicitVision } from './vision.js';
 import { matchAsk } from './ask.js';
 import { matchConfirm } from './confirm.js';
 import { geminiClassify } from './gemini.js';
@@ -15,6 +15,8 @@ export async function parseWithSource(text, vocab, classify = geminiClassify) {
   if (p) return { intent: p, via: 'rules' };
   const vi = matchVision(text);
   if (vi) return { intent: vi, via: 'rules' };
+  const ivi = matchImplicitVision(text);
+  if (ivi) return { intent: ivi, via: 'rules' };
   const a = matchAsk(text);
   if (a) return { intent: a, via: 'rules' };
   const c = matchConfirm(text);
@@ -35,6 +37,7 @@ export function parseLocal(text, vocab) {
     matchSwitchCommand(text, vocab) ||
     matchPcCommand(text, vocab) ||
     matchVision(text) ||
+    matchImplicitVision(text) ||
     matchAsk(text) ||
     matchConfirm(text) ||
     null
