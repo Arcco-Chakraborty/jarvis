@@ -6,8 +6,8 @@ export function makeVision({ phone, screen, describe } = {}) {
       const cap = source === 'screen' ? screen : phone;
       const shot = await cap();
       if (!shot.ok) return { ok: false, speak: shot.speak };
-      const speak = await describe(query, shot.data, shot.mime);
-      return { ok: true, speak };
+      // describe() already returns the { ok, speak } shape the router expects.
+      return describe(query, shot.data, shot.mime);
     },
   };
 }
