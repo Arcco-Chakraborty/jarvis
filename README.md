@@ -80,6 +80,7 @@ jarvis/
     public/index.html    live dashboard
   voice-service/       Python wake → record → STT → dispatch → TTS loop
   pc-agent/            tiny dependency-free Node agent that runs on each controllable PC
+  smart_switch/        ESP32 firmware (Arduino sketch) for the 8-relay board
   deploy/              example systemd units
   demo.html            standalone holographic UI preview (no backend)
   setup-new-pc.sh      one-command bootstrap for a fresh Ubuntu host
@@ -184,8 +185,12 @@ the board only knows relay indices `0–7`. Default channel map (edit in the reg
 
 Commands always use the board's idempotent `/set` endpoint, so a retried command never
 flips state back. The board's standalone web UI keeps working independently — JARVIS is
-just another HTTP client on the LAN. *(JARVIS does not control the relay firmware; it
-talks to the board's fixed HTTP API.)*
+just another HTTP client on the LAN.
+
+The Arduino firmware lives in **[`smart_switch/`](smart_switch/)** — see
+[`smart_switch/README.md`](smart_switch/README.md) for the GPIO map, the HTTP API, and
+flashing instructions (set your WiFi credentials, flash via the Arduino IDE, then point
+`ESP32_BASE_URL` at the IP it prints on the serial monitor).
 
 ---
 
