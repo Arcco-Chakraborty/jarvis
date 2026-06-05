@@ -1,0 +1,5 @@
+# Normalize line endings; keep shell scripts LF so they run on Linux.
+* text=auto
+*.sh text eol=lf
+run-jarvis.sh text eol=lf
+setup-new-pc.sh text eol=lf

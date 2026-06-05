@@ -8,12 +8,12 @@ test('phone fetches the snapshot URL and returns base64 jpeg', async () => {
     calledUrl = url;
     return { ok: true, headers: { get: () => 'image/jpeg' }, arrayBuffer: async () => Uint8Array.from([0xff, 0xd8, 0xff]).buffer };
   };
-  const cap = makeCapture({ fetchFn, phoneUrl: 'http://192.168.0.187:8080/photo.jpg' });
+  const cap = makeCapture({ fetchFn, phoneUrl: 'http://192.168.1.187:8080/photo.jpg' });
   const r = await cap.phone();
   assert.equal(r.ok, true);
   assert.equal(r.mime, 'image/jpeg');
   assert.equal(r.data, Buffer.from([0xff, 0xd8, 0xff]).toString('base64'));
-  assert.equal(calledUrl, 'http://192.168.0.187:8080/photo.jpg');
+  assert.equal(calledUrl, 'http://192.168.1.187:8080/photo.jpg');
 });
 
 test('phone falls back to image/jpeg when no content-type', async () => {

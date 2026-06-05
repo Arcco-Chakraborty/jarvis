@@ -11,7 +11,7 @@ test('assertEsp32Configured throws when baseUrl is missing', () => {
 
 test('assertEsp32Configured passes when baseUrl is set', () => {
   assert.doesNotThrow(
-    () => assertEsp32Configured({ esp32: { baseUrl: 'http://192.168.0.202' } }),
+    () => assertEsp32Configured({ esp32: { baseUrl: 'http://192.168.1.50' } }),
   );
 });
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# JARVIS — one-command bootstrap for a new Linux host (Ubuntu / Debian).
+# JARVIS — one-command bootstrap for a new Ubuntu host.
 #
 # Fresh machine (downloads & clones):
 #   bash <(curl -fsSL https://raw.githubusercontent.com/Arcco-Chakraborty/jarvis/main/setup-new-pc.sh)
@@ -7,11 +7,15 @@
 # Or if you've already cloned the repo:
 #   cd jarvis && ./setup-new-pc.sh
 #
+# Defaults to the GPU voice stack (faster-whisper large-v3 on CUDA), matching
+# .env.example. No NVIDIA GPU? The script warns and you switch .env to CPU
+# (see README → "Running without a GPU").
+#
 # Flags:
 #   --skip-packages    don't apt-install system deps (you've handled them)
-#   --skip-models      don't download Vosk + Piper (you'll do it manually)
-#   --skip-tests       don't run npm/python test suites at the end
-#   --gpu              also install CUDA-side STT deps (assumes nvidia-smi works)
+#   --skip-models      don't download the Piper voice (you'll do it manually)
+#   --skip-tests       don't run the npm/python test suites at the end
+#   --vosk             also download the offline Vosk STT model (opt-in fallback)
 #   -h | --help        show usage
 
 set -euo pipefail
@@ -22,10 +26,13 @@ REPO_NAME="jarvis"
 REPO_HTTPS="https://github.com/${GH_OWNER}/${REPO_NAME}.git"
 PY_VER="3.12"
 
+# Piper TTS voice (must match PIPER_VOICE in .env.example).
+PIPER_BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/medium"
+PIPER_ONNX="en_GB-alan-medium.onnx"
+
+# Optional offline Vosk STT model (--vosk).
 VOSK_URL="https://alphacephei.com/vosk/models/vosk-model-en-us-0.22-lgraph.zip"
 VOSK_DIR="vosk-model-en-us-0.22-lgraph"
-PIPER_BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium"
-PIPER_ONNX="en_US-lessac-medium.onnx"
 
 # ---------- helpers ----------
 step()  { printf '\n\033[1;36m▸ %s\033[0m\n' "$*"; }
@@ -35,14 +42,14 @@ die()   { printf '\033[1;31m✗\033[0m %s\n' "$*" >&2; exit 1; }
 have()  { command -v "$1" >/dev/null 2>&1; }
 
 # ---------- flags ----------
-SKIP_PACKAGES=0; SKIP_MODELS=0; SKIP_TESTS=0; WANT_GPU=0
+SKIP_PACKAGES=0; SKIP_MODELS=0; SKIP_TESTS=0; WANT_VOSK=0
 for arg in "$@"; do
   case "$arg" in
     --skip-packages) SKIP_PACKAGES=1 ;;
     --skip-models)   SKIP_MODELS=1 ;;
     --skip-tests)    SKIP_TESTS=1 ;;
-    --gpu)           WANT_GPU=1 ;;
-    -h|--help)       sed -n '2,16p' "$0"; exit 0 ;;
+    --vosk)          WANT_VOSK=1 ;;
+    -h|--help)       sed -n '2,19p' "$0"; exit 0 ;;
     *) die "Unknown flag: $arg (use --help)" ;;
   esac
 done
@@ -56,8 +63,7 @@ case "${ID_LIKE:-${ID:-}}" in
   *) PKG_OK=0 ;;
 esac
 if [ "$SKIP_PACKAGES" = 0 ] && [ "$PKG_OK" = 0 ]; then
-  warn "Non-Debian host detected — pass --skip-packages and install equivalents yourself."
-  exit 1
+  die "This script targets Ubuntu/Debian. On another distro, install the equivalents and re-run with --skip-packages."
 fi
 
 # ---------- 1: system packages ----------
@@ -76,7 +82,7 @@ if [ "$SKIP_PACKAGES" = 0 ]; then
   sudo apt-get install -y \
     "python${PY_VER}" "python${PY_VER}-venv" \
     git gh curl unzip \
-    alsa-utils pulseaudio-utils \
+    alsa-utils pulseaudio-utils pipewire-bin \
     playerctl wmctrl xdotool xdg-utils \
     gnome-screenshot || warn "some optional packages may have failed — fine if it's just gnome-screenshot on KDE"
 
@@ -111,13 +117,15 @@ step ".env"
 if [ ! -f .env ]; then
   cp .env.example .env
   ok "Created .env from .env.example"
-  cat <<EOF
+  cat <<'EOF'
 
   Open .env in your editor and set:
-    ESP32_BASE_URL    — your relay board (default already set if reused; mine is http://192.168.0.202)
-    GEMINI_API_KEY    — optional intent fallback; leave blank to disable
-    WEATHER_LAT/LON   — optional override (defaults to Pilani 28.36, 75.59)
-    PC_AGENT_TOKEN    — unused yet (Phase 3 LAN agent); leave default
+    ESP32_BASE_URL    — your relay board's IP (give it a static DHCP lease)
+    GEMINI_API_KEY    — optional intent/vision fallback; leave blank to disable
+    PC_AGENTS         — optional: name=url for each PC agent (e.g. laptop=http://192.168.1.60:7000)
+    PC_AGENT_TOKEN    — shared secret with your PC agents
+    PHONE_CAMERA_URL  — optional: IP-webcam snapshot URL for vision
+    WEATHER_LAT/LON   — optional: coordinates for weather answers
 
 EOF
   read -rp "  Press Enter when you've edited .env (or Ctrl-C to abort)... " _
@@ -140,33 +148,45 @@ fi
 uv pip install -r voice-service/requirements.txt
 ok "Voice deps installed"
 
-# ---------- 6: voice models ----------
+# ---------- 6: GPU STT runtime (default) ----------
+step "GPU STT runtime (faster-whisper on CUDA)"
+if have nvidia-smi; then
+  uv pip install nvidia-cudnn-cu12 'ctranslate2[cuda]' huggingface-hub
+  ok "CUDA STT deps installed — large-v3 downloads from Hugging Face on first run"
+else
+  warn "nvidia-smi not found. The default .env expects a GPU (WHISPER_DEVICE=cuda)."
+  warn "Run CPU-only by editing .env: WHISPER_DEVICE=cpu, WHISPER_MODEL=base (see README)."
+fi
+
+# ---------- 7: voice models ----------
 if [ "$SKIP_MODELS" = 0 ]; then
-  step "Downloading voice models (~270 MB, one-time)"
+  step "Downloading voice models (one-time)"
   mkdir -p voice-service/models
   pushd voice-service/models >/dev/null
 
-  if [ ! -d "$VOSK_DIR" ]; then
-    echo "  Vosk lgraph (~205 MB)..."
-    curl -L --fail -o vosk.zip "$VOSK_URL"
-    unzip -q vosk.zip && rm vosk.zip
-    ok "Vosk model ready"
-  else
-    ok "Vosk model already present"
-  fi
-
   if [ ! -f "$PIPER_ONNX" ]; then
-    echo "  Piper voice (~63 MB)..."
+    echo "  Piper voice (en_GB-alan-medium, ~63 MB)..."
     curl -L --fail -O "${PIPER_BASE}/${PIPER_ONNX}"
     curl -L --fail -O "${PIPER_BASE}/${PIPER_ONNX}.json"
     ok "Piper voice ready"
   else
     ok "Piper voice already present"
   fi
+
+  if [ "$WANT_VOSK" = 1 ]; then
+    if [ ! -d "$VOSK_DIR" ]; then
+      echo "  Vosk lgraph model (~205 MB)..."
+      curl -L --fail -o vosk.zip "$VOSK_URL"
+      unzip -q vosk.zip && rm vosk.zip
+      ok "Vosk model ready (set VOICE_STT_BACKEND=vosk in .env to use it)"
+    else
+      ok "Vosk model already present"
+    fi
+  fi
   popd >/dev/null
 fi
 
-# ---------- 7: verify ----------
+# ---------- 8: verify ----------
 if [ "$SKIP_TESTS" = 0 ]; then
   step "Running tests"
   npm test 2>&1 | tail -10
@@ -176,25 +196,6 @@ if [ "$SKIP_TESTS" = 0 ]; then
   .venv/bin/python -m unittest discover -s voice-service/tests 2>&1 | tail -3
   .venv/bin/python -m unittest discover -s voice-service/tests 2>&1 | grep -q '^OK$' || die "Voice tests failed."
   ok "Voice: OK"
-fi
-
-# ---------- 8: optional GPU STT ----------
-if [ "$WANT_GPU" = 1 ]; then
-  step "Installing CUDA STT deps (faster-whisper)"
-  if ! have nvidia-smi; then
-    warn "nvidia-smi not found — skipping GPU bits (do this after the NVIDIA driver is installed)."
-  else
-    uv pip install nvidia-cudnn-cu12 'ctranslate2[cuda]' huggingface-hub
-    echo
-    echo "  Suggested .env edits:"
-    echo "    VOICE_STT_BACKEND=whisper"
-    echo "    WHISPER_MODEL=distil-large-v3"
-    echo "    WHISPER_COMPUTE_TYPE=float16"
-    echo
-    echo "  Then download the model:"
-    echo "    .venv/bin/huggingface-cli download Systran/faster-distil-whisper-large-v3"
-    echo
-  fi
 fi
 
 # ---------- 9: done ----------
@@ -217,12 +218,12 @@ Launch:
 Then open http://localhost:3000/  •  say "jarvis"  •  click ↻ on the Devices
 widget to confirm board state.
 
-Phase 3.5 commands you can try (typed in the dashboard command box):
+Things to try (spoken, or typed in the dashboard command box):
   open chrome
-  play discover weekly         (search Spotify)
-  search about machine learning (Google in default browser)
+  play discover weekly          (search + play)
+  search for machine learning   (Google in the default browser)
   split chrome with code        (tile two windows)
   run free space                (recipe — will ask "confirm" before executing)
 
-If anything failed above, ping back with the output and we'll debug.
+If anything failed above, re-run with the relevant --skip-* flag and check the README.
 EOF
