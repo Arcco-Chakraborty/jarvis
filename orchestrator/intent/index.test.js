@@ -79,3 +79,24 @@ test('cascade passes pcNames so "open x on the desktop" carries a machine', asyn
   const { intent } = await parseWithSource('open chrome on the desktop', { pcNames: ['desktop'] }, async () => null);
   assert.deepEqual(intent, { domain: 'pc', action: 'open_app', target: 'chrome', machine: 'desktop' });
 });
+
+test('implicit vision routes deictic questions before ask', async () => {
+  const noGemini = async () => null;
+  const r = await parse('how do i connect these', {}, noGemini);
+  assert.equal(r.domain, 'vision');
+  assert.equal(r.implicit, true);
+  assert.equal(r.source, 'phone');
+});
+
+test('explicit vision is unaffected (no implicit flag)', async () => {
+  const noGemini = async () => null;
+  const r = await parse('what is this', {}, noGemini);
+  assert.equal(r.domain, 'vision');
+  assert.notEqual(r.implicit, true);
+});
+
+test('plain knowledge questions still reach ask', async () => {
+  const noGemini = async () => null;
+  const r = await parse("what's the capital of france", {}, noGemini);
+  assert.equal(r.domain, 'ask');
+});

@@ -46,3 +46,17 @@ export function matchVision(text) {
   }
   return null;
 }
+
+const DEMONSTRATIVE = /\b(this|that|these|those|here)\b/;
+const BARE_HELP = /^(fix\b|what'?s wrong with\b|what is wrong with\b)/;
+
+// Implicit vision: natural phrasing that points at something physical. Runs
+// after explicit vision and before the knowledge matcher. Always the phone.
+export function matchImplicitVision(text) {
+  const norm = normalize(text);
+  if (!norm) return null;
+  if (DEMONSTRATIVE.test(norm) || BARE_HELP.test(norm)) {
+    return { domain: 'vision', source: 'phone', query: norm, implicit: true };
+  }
+  return null;
+}
