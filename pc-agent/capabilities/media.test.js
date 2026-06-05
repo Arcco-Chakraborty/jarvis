@@ -53,3 +53,13 @@ test('set_volume clamps out-of-range levels', () => {
   const script = r.calls[0].args.join(' ');
   assert.ok(script.includes('1..50'), 'clamps to 100 -> 50 up-steps');
 });
+
+test('set_volume level 0 floors with no up-steps (avoids PowerShell 1..0 descending range)', () => {
+  const r = rec();
+  const res = makeMedia({ spawn: r.spawn }).actions.set_volume({ level: 0 });
+  assert.equal(res.ok, true);
+  const script = r.calls[0].args.join(' ');
+  assert.ok(script.includes('1..50'), 'still floors with 50 down-steps');
+  assert.ok(!script.includes('0xAF'), 'no volume-up steps at level 0');
+  assert.ok(!/1\.\.0/.test(script), 'never emits the 1..0 descending range');
+});

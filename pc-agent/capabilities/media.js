@@ -28,7 +28,7 @@ function setVolume(spawn, level) {
     '$k=Add-Type -MemberDefinition $s -Name K -Namespace W -PassThru;' +
     'function vk($c){$k::keybd_event($c,0,0,[IntPtr]::Zero);$k::keybd_event($c,0,2,[IntPtr]::Zero)}' +
     '1..50 | % { vk 0xAE };' +
-    `1..${ups} | % { vk 0xAF };`;
+    (ups > 0 ? `1..${ups} | % { vk 0xAF };` : '');
   try {
     const p = spawn('powershell', ['-NoProfile', '-Command', script], OPTS);
     p?.unref?.();

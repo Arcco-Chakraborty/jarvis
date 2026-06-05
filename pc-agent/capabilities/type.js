@@ -15,7 +15,7 @@ export function makeType({ spawn = _spawn } = {}) {
       send({ text } = {}) {
         const raw = String(text ?? '').trim();
         if (!raw) return { ok: false, detail: 'no text' };
-        const keys = escapeSendKeys(raw).replace(/'/g, '');
+        const keys = escapeSendKeys(raw).replace(/'/g, "''");
         const script =
           'Add-Type -AssemblyName System.Windows.Forms;' +
           `[System.Windows.Forms.SendKeys]::SendWait('${keys}')`;

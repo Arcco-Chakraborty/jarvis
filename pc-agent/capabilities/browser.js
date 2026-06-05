@@ -16,7 +16,7 @@ export function makeBrowser({ spawn = _spawn } = {}) {
       open({ url } = {}) {
         const u = normalize(url);
         if (!u) return { ok: false, detail: 'no url' };
-        const safe = u.replace(/'/g, '');
+        const safe = u.replace(/'/g, "''");
         try {
           const p = spawn('powershell', ['-NoProfile', '-Command', `Start-Process '${safe}'`], OPTS);
           p?.unref?.();

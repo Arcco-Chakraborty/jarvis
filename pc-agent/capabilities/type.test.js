@@ -27,3 +27,10 @@ test('send escapes SendKeys metacharacters', () => {
 test('send rejects empty text', () => {
   assert.equal(makeType({ spawn: rec().spawn }).actions.send({ text: '' }).ok, false);
 });
+
+test('send preserves apostrophes by doubling them for PowerShell', () => {
+  const r = rec();
+  makeType({ spawn: r.spawn }).actions.send({ text: "it's done" });
+  const script = r.calls[0].args.join(' ');
+  assert.ok(script.includes("it''s done"), "apostrophe doubled, not stripped");
+});
