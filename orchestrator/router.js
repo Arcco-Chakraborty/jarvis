@@ -70,6 +70,14 @@ async function _route(intent, { board, registry, openApp, media, window: win, br
         default:             return { ok: false, speak: "I don't know how to do that." };
       }
     }
+    if (intent.action === 'type') {
+      if (!intent.machine) return { ok: false, speak: 'I can only type on a PC — say "type … on the laptop".' };
+      const a = pcAgents?.get?.(intent.machine);
+      if (!a) return { ok: false, speak: `I don't know a PC called ${intent.machine}.` };
+      if (!agentClient) return { ok: false, speak: 'PC agent client not configured.' };
+      const r = await agentClient.run(a.base_url, { capability: 'type', action: 'send', params: { text: intent.text } });
+      return remoteSpeak(r, intent.machine);
+    }
     if (intent.action === 'window') {
       if (!win) return { ok: false, speak: 'Window capability not configured.' };
       switch (intent.op) {

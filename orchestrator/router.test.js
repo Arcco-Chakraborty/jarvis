@@ -435,6 +435,21 @@ test('media op WITHOUT a machine still uses local media', async () => {
   registry.close();
 });
 
+test('remote type dispatches text to the agent type capability', async () => {
+  const calls = [];
+  const agentClient = { run: async (b, p) => { calls.push(p); return { ok: true, detail: 'Typed.' }; } };
+  const pcAgents = { get: () => ({ name: 'laptop', base_url: 'http://x:7000' }) };
+  const r = await route({ domain: 'pc', action: 'type', text: 'hello world', machine: 'laptop' }, { agentClient, pcAgents });
+  assert.equal(r.ok, true);
+  assert.deepEqual(calls[0], { capability: 'type', action: 'send', params: { text: 'hello world' } });
+});
+
+test('type without a machine is rejected (remote-only)', async () => {
+  const r = await route({ domain: 'pc', action: 'type', text: 'hello' }, {});
+  assert.equal(r.ok, false);
+  assert.match(r.speak, /on (a|the)/i);
+});
+
 test('remote open_app routes a URL-like target to the browser capability', async () => {
   const calls = [];
   const agentClient = { run: async (base, payload) => { calls.push(payload); return { ok: true, detail: 'Opening https://youtube.com.' }; } };
